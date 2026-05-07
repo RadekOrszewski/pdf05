@@ -1,1 +1,338 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XMR X-Chart · Cycle Time</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&family=Source+Serif+4:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#fafaf8;--surface:#fff;--surface2:#f4f3ef;
+  --border:#e2e0d8;--border-light:#eceae2;
+  --text:#1a1a18;--text-dim:#6b6960;--text-muted:#9e9b90;
+  --accent:#2563eb;--accent-bg:rgba(37,99,235,.06);
+  --mean:#2563eb;--mean-bg:rgba(37,99,235,.08);
+  --unpl:#dc2626;--unpl-bg:rgba(220,38,38,.06);
+  --lnpl:#16a34a;--lnpl-bg:rgba(22,163,74,.06);
+  --dot:#1e293b;--dot-signal:#dc2626;
+  --line:#94a3b8;
+  --font-mono:'IBM Plex Mono',monospace;
+  --font-serif:'Source Serif 4',Georgia,serif;
+}
+html{font-size:14px}
+body{background:var(--bg);color:var(--text);font-family:var(--font-serif);min-height:100vh}
+.wrapper{max-width:1100px;margin:0 auto;padding:2.5rem 2rem}
 
+/* Header */
+.header{margin-bottom:2.2rem;border-bottom:2px solid var(--text);padding-bottom:1rem}
+.header h1{font-family:var(--font-mono);font-weight:700;font-size:1.5rem;letter-spacing:-.02em;color:var(--text)}
+.header .sub{font-family:var(--font-mono);color:var(--text-dim);margin-top:.3rem;font-size:.78rem;letter-spacing:.02em}
+
+/* Stats */
+.stats{display:flex;gap:0;margin-bottom:2rem;border:1px solid var(--border);border-radius:0}
+.stat{flex:1;padding:1rem 1.2rem;border-right:1px solid var(--border);position:relative}
+.stat:last-child{border-right:none}
+.stat-label{font-family:var(--font-mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.12em;color:var(--text-muted);margin-bottom:.25rem}
+.stat-value{font-family:var(--font-mono);font-size:1.6rem;font-weight:700}
+.stat-unit{font-size:.7rem;font-weight:400;color:var(--text-dim);margin-left:.15rem}
+.stat.mean .stat-value{color:var(--mean)}
+.stat.unpl .stat-value{color:var(--unpl)}
+.stat.lnpl .stat-value{color:var(--lnpl)}
+.stat.mr .stat-value{color:var(--text)}
+.stat-formula{font-family:var(--font-mono);font-size:.55rem;color:var(--text-muted);margin-top:.2rem;letter-spacing:.02em}
+
+/* Chart */
+.chart-wrap{background:var(--surface);border:1px solid var(--border);padding:1.5rem 1.2rem 1rem;position:relative}
+.chart-area{width:100%;height:440px;position:relative}
+canvas{display:block;width:100%!important;height:100%!important}
+
+/* Legend */
+.legend{display:flex;gap:1.8rem;margin-top:.8rem;padding-top:.8rem;border-top:1px solid var(--border-light);justify-content:center}
+.legend-item{display:flex;align-items:center;gap:.4rem;font-family:var(--font-mono);font-size:.68rem;color:var(--text-dim)}
+.legend-line{width:22px;height:0;border-top:2px solid}
+.legend-line.mean{border-color:var(--mean)}
+.legend-line.unpl{border-color:var(--unpl);border-top-style:dashed}
+.legend-line.lnpl{border-color:var(--lnpl);border-top-style:dashed}
+.legend-dot{width:8px;height:8px;border-radius:50%;border:2px solid var(--dot);background:var(--surface)}
+.legend-dot.signal{border-color:var(--dot-signal);background:var(--dot-signal)}
+
+/* Tooltip */
+.tooltip{position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:2px;padding:.7rem .9rem;pointer-events:none;opacity:0;transition:opacity .12s;z-index:100;font-size:.78rem;box-shadow:0 4px 20px rgba(0,0,0,.08);min-width:185px}
+.tooltip.visible{opacity:1}
+.tooltip .tt-id{font-family:var(--font-mono);font-size:.62rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.3rem}
+.tooltip .tt-ct{font-family:var(--font-mono);font-size:1.2rem;font-weight:700;color:var(--text)}
+.tooltip .tt-ct.signal{color:var(--dot-signal)}
+.tooltip .tt-dates{font-family:var(--font-mono);font-size:.65rem;color:var(--text-dim);margin-top:.3rem;line-height:1.5}
+.tooltip .tt-mr{font-family:var(--font-mono);font-size:.65rem;color:var(--text-muted);margin-top:.2rem}
+.tooltip .tt-signal{font-family:var(--font-mono);font-size:.6rem;color:var(--dot-signal);margin-top:.3rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+
+/* Table below */
+.data-table-wrap{margin-top:2rem;border:1px solid var(--border);overflow-x:auto}
+.data-table{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:.72rem}
+.data-table th{background:var(--surface2);font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:.58rem;padding:.6rem .7rem;text-align:left;border-bottom:1px solid var(--border);color:var(--text-dim);position:sticky;top:0}
+.data-table td{padding:.45rem .7rem;border-bottom:1px solid var(--border-light);color:var(--text)}
+.data-table tr:hover td{background:var(--accent-bg)}
+.data-table .signal-row td{color:var(--unpl);font-weight:600}
+.data-table .num{text-align:right;font-variant-numeric:tabular-nums}
+
+@media(max-width:700px){
+  .wrapper{padding:1.5rem 1rem}.chart-area{height:300px}.stats{flex-wrap:wrap}.stat{min-width:45%}.stat-value{font-size:1.2rem}
+}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <h1>XMR X-Chart</h1>
+    <div class="sub">Individual Values Chart · Team Cycle Time · sty 2024 – kwi 2024</div>
+  </div>
+
+  <div class="stats">
+    <div class="stat mean">
+      <div class="stat-label">Średni CT (X̄)</div>
+      <div class="stat-value" id="s-mean">—</div>
+      <div class="stat-formula">Σ CT / n</div>
+    </div>
+    <div class="stat mr">
+      <div class="stat-label">Średnia MR (m̄R)</div>
+      <div class="stat-value" id="s-mr">—</div>
+      <div class="stat-formula">Σ |CTᵢ − CTᵢ₋₁| / (n−1)</div>
+    </div>
+    <div class="stat unpl">
+      <div class="stat-label">UNPL</div>
+      <div class="stat-value" id="s-unpl">—</div>
+      <div class="stat-formula">X̄ + 2.66 × m̄R</div>
+    </div>
+    <div class="stat lnpl">
+      <div class="stat-label">LNPL</div>
+      <div class="stat-value" id="s-lnpl">—</div>
+      <div class="stat-formula">X̄ − 2.66 × m̄R (min 0)</div>
+    </div>
+  </div>
+
+  <div class="chart-wrap">
+    <div class="chart-area"><canvas id="chart"></canvas></div>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-line mean"></span> Średni CT</div>
+      <div class="legend-item"><span class="legend-line unpl"></span> UNPL</div>
+      <div class="legend-item"><span class="legend-line lnpl"></span> LNPL</div>
+      <div class="legend-item"><span class="legend-dot"></span> W normie</div>
+      <div class="legend-item"><span class="legend-dot signal"></span> Sygnał</div>
+    </div>
+  </div>
+
+  <div class="data-table-wrap">
+    <table class="data-table" id="data-table">
+      <thead>
+        <tr><th>#</th><th>Rozpoczęty</th><th>Zamknięty</th><th class="num">CT (dni)</th><th class="num">MR</th><th>Status</th></tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip">
+  <div class="tt-id" id="tt-id"></div>
+  <div class="tt-ct" id="tt-ct"></div>
+  <div class="tt-dates" id="tt-dates"></div>
+  <div class="tt-mr" id="tt-mr"></div>
+  <div class="tt-signal" id="tt-signal" style="display:none"></div>
+</div>
+
+<script>
+const DATA = [{"id":1,"closed":"2024-01-05","closedLabel":"05.01.2024","started":"2023-11-28","ct":38},{"id":2,"closed":"2024-01-11","closedLabel":"11.01.2024","started":"2023-12-20","ct":24},{"id":3,"closed":"2024-01-16","closedLabel":"16.01.2024","started":"2024-01-02","ct":14},{"id":4,"closed":"2024-01-17","closedLabel":"17.01.2024","started":"2024-01-10","ct":9},{"id":5,"closed":"2024-01-22","closedLabel":"22.01.2024","started":"2024-01-18","ct":4},{"id":6,"closed":"2024-01-26","closedLabel":"26.01.2024","started":"2024-01-03","ct":25},{"id":7,"closed":"2024-01-29","closedLabel":"29.01.2024","started":"2024-01-10","ct":19},{"id":8,"closed":"2024-02-06","closedLabel":"06.02.2024","started":"2023-12-19","ct":51},{"id":9,"closed":"2024-02-12","closedLabel":"12.02.2024","started":"2023-12-26","ct":48},{"id":10,"closed":"2024-02-15","closedLabel":"15.02.2024","started":"2024-02-02","ct":15},{"id":11,"closed":"2024-02-17","closedLabel":"17.02.2024","started":"2024-01-26","ct":22},{"id":12,"closed":"2024-02-18","closedLabel":"18.02.2024","started":"2024-01-09","ct":42},{"id":13,"closed":"2024-02-19","closedLabel":"19.02.2024","started":"2024-02-02","ct":17},{"id":14,"closed":"2024-02-21","closedLabel":"21.02.2024","started":"2024-02-16","ct":7},{"id":15,"closed":"2024-02-28","closedLabel":"28.02.2024","started":"2024-02-23","ct":5},{"id":16,"closed":"2024-03-12","closedLabel":"12.03.2024","started":"2024-02-20","ct":20},{"id":17,"closed":"2024-03-14","closedLabel":"14.03.2024","started":"2024-01-12","ct":63},{"id":18,"closed":"2024-03-19","closedLabel":"19.03.2024","started":"2024-03-13","ct":6},{"id":19,"closed":"2024-03-20","closedLabel":"20.03.2024","started":"2024-01-25","ct":56},{"id":20,"closed":"2024-03-22","closedLabel":"22.03.2024","started":"2024-02-28","ct":24},{"id":21,"closed":"2024-03-22","closedLabel":"22.03.2024","started":"2024-02-28","ct":22},{"id":22,"closed":"2024-03-26","closedLabel":"26.03.2024","started":"2024-02-06","ct":50},{"id":23,"closed":"2024-03-27","closedLabel":"27.03.2024","started":"2024-03-21","ct":8},{"id":24,"closed":"2024-03-28","closedLabel":"28.03.2024","started":"2024-03-26","ct":2},{"id":25,"closed":"2024-03-29","closedLabel":"29.03.2024","started":"2024-03-28","ct":3},{"id":26,"closed":"2024-03-30","closedLabel":"30.03.2024","started":"2024-03-22","ct":8},{"id":27,"closed":"2024-04-01","closedLabel":"01.04.2024","started":"2024-02-26","ct":36},{"id":28,"closed":"2024-04-02","closedLabel":"02.04.2024","started":"2024-03-06","ct":27},{"id":29,"closed":"2024-04-09","closedLabel":"09.04.2024","started":"2024-03-13","ct":29},{"id":30,"closed":"2024-04-09","closedLabel":"09.04.2024","started":"2024-03-20","ct":20}];
+
+// ── Compute XMR ──
+const cts = DATA.map(d => d.ct);
+const n = cts.length;
+const meanCT = cts.reduce((a,b) => a+b, 0) / n;
+
+const mrs = [];
+for (let i = 1; i < n; i++) mrs.push(Math.abs(cts[i] - cts[i-1]));
+const meanMR = mrs.reduce((a,b) => a+b, 0) / mrs.length;
+
+const UNPL = meanCT + 2.66 * meanMR;
+const LNPL = Math.max(0, meanCT - 2.66 * meanMR);
+
+// Update stat cards
+document.getElementById('s-mean').innerHTML = meanCT.toFixed(1) + '<span class="stat-unit">dni</span>';
+document.getElementById('s-mr').innerHTML = meanMR.toFixed(1) + '<span class="stat-unit">dni</span>';
+document.getElementById('s-unpl').innerHTML = UNPL.toFixed(1) + '<span class="stat-unit">dni</span>';
+document.getElementById('s-lnpl').innerHTML = LNPL.toFixed(1) + '<span class="stat-unit">dni</span>';
+
+// Check signals
+function isSignal(ct) { return ct > UNPL || ct < LNPL; }
+
+// ── Populate table ──
+const tbody = document.getElementById('table-body');
+DATA.forEach((d, i) => {
+  const mr = i > 0 ? Math.abs(cts[i] - cts[i-1]) : '—';
+  const sig = isSignal(d.ct);
+  const tr = document.createElement('tr');
+  if (sig) tr.className = 'signal-row';
+  tr.innerHTML = `<td>${d.id}</td><td>${d.started}</td><td>${d.closedLabel}</td><td class="num">${d.ct}</td><td class="num">${typeof mr === 'number' ? mr : '—'}</td><td>${sig ? '⚠ Sygnał' : '✓'}</td>`;
+  tbody.appendChild(tr);
+});
+
+// ── Canvas ──
+const canvas = document.getElementById('chart');
+const ctx = canvas.getContext('2d');
+let W, H;
+const PAD = { top: 30, right: 50, bottom: 50, left: 55 };
+let hoveredIdx = -1;
+
+function resize() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  W = rect.width; H = rect.height;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+
+  const yMax = Math.max(UNPL, Math.max(...cts)) * 1.12;
+  const yMin = 0;
+
+  const xScale = i => PAD.left + (i / (n - 1)) * plotW;
+  const yScale = v => PAD.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+
+  // ── Grid ──
+  const yStep = yMax > 80 ? 10 : 5;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let v = 0; v <= yMax; v += yStep) {
+    const y = Math.round(yScale(v)) + .5;
+    ctx.strokeStyle = '#e8e6de'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(W - PAD.right, y); ctx.stroke();
+    ctx.fillStyle = '#9e9b90'; ctx.font = '11px "IBM Plex Mono", monospace';
+    ctx.fillText(v, PAD.left - 8, y);
+  }
+
+  // X axis labels
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillStyle = '#9e9b90'; ctx.font = '10px "IBM Plex Mono", monospace';
+  const labelStep = n > 20 ? 3 : n > 12 ? 2 : 1;
+  for (let i = 0; i < n; i += labelStep) {
+    const x = xScale(i);
+    ctx.fillText(DATA[i].closedLabel, x, H - PAD.bottom + 8);
+    // Tick
+    ctx.strokeStyle = '#d4d2ca'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, H - PAD.bottom); ctx.lineTo(x, H - PAD.bottom + 4); ctx.stroke();
+  }
+
+  // Y axis label
+  ctx.save(); ctx.fillStyle = '#9e9b90'; ctx.font = '600 10px "IBM Plex Mono", monospace';
+  ctx.translate(14, PAD.top + plotH / 2); ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center'; ctx.fillText('CYCLE TIME (dni)', 0, 0); ctx.restore();
+
+  // ── LNPL line ──
+  if (LNPL > 0) {
+    const yL = yScale(LNPL);
+    ctx.strokeStyle = '#16a34a'; ctx.lineWidth = 1.5; ctx.setLineDash([8, 5]);
+    ctx.beginPath(); ctx.moveTo(PAD.left, yL); ctx.lineTo(W - PAD.right, yL); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#16a34a'; ctx.font = '600 10px "IBM Plex Mono", monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText(`LNPL: ${LNPL.toFixed(1)}`, W - PAD.right + 4, yL + 4);
+  }
+
+  // ── Mean line ──
+  const yM = yScale(meanCT);
+  ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 2; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(PAD.left, yM); ctx.lineTo(W - PAD.right, yM); ctx.stroke();
+  ctx.fillStyle = '#2563eb'; ctx.font = '600 10px "IBM Plex Mono", monospace';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  ctx.fillText(`X̄: ${meanCT.toFixed(1)}`, W - PAD.right + 4, yM - 3);
+
+  // ── UNPL line ──
+  const yU = yScale(UNPL);
+  ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 1.5; ctx.setLineDash([8, 5]);
+  ctx.beginPath(); ctx.moveTo(PAD.left, yU); ctx.lineTo(W - PAD.right, yU); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#dc2626'; ctx.font = '600 10px "IBM Plex Mono", monospace';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(`UNPL: ${UNPL.toFixed(1)}`, W - PAD.right + 4, yU - 2);
+
+  // ── Connecting line ──
+  ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.5; ctx.setLineDash([]);
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const x = xScale(i), y = yScale(cts[i]);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // ── Dots ──
+  const dots = [];
+  for (let i = 0; i < n; i++) {
+    const x = xScale(i), y = yScale(cts[i]);
+    const sig = isSignal(cts[i]);
+    const isHov = hoveredIdx === i;
+    const r = isHov ? 7 : 5;
+
+    if (sig) {
+      // Red filled dot for signals
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      if (isHov) { ctx.strokeStyle = '#991b1b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, r + 2, 0, Math.PI * 2); ctx.stroke(); }
+    } else {
+      // White dot with dark border
+      ctx.fillStyle = '#fff';
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      if (isHov) { ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, r + 2, 0, Math.PI * 2); ctx.stroke(); }
+    }
+
+    dots.push({ x, y, r: 16, idx: i });
+  }
+  window._dots = dots;
+}
+
+// ── Tooltip ──
+const tooltip = document.getElementById('tooltip');
+
+function findDot(e) {
+  const rect = canvas.getBoundingClientRect(), mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  for (const dot of (window._dots || [])) {
+    if ((mx - dot.x) ** 2 + (my - dot.y) ** 2 < dot.r ** 2) return dot;
+  }
+  return null;
+}
+
+canvas.addEventListener('mousemove', e => {
+  const dot = findDot(e);
+  const ni = dot ? dot.idx : -1;
+  if (ni !== hoveredIdx) { hoveredIdx = ni; draw(); }
+  if (dot) {
+    const d = DATA[dot.idx];
+    const mr = dot.idx > 0 ? Math.abs(cts[dot.idx] - cts[dot.idx - 1]) : null;
+    const sig = isSignal(d.ct);
+
+    document.getElementById('tt-id').textContent = `Element #${d.id}`;
+    const ttCt = document.getElementById('tt-ct');
+    ttCt.textContent = d.ct + ' dni';
+    ttCt.className = 'tt-ct' + (sig ? ' signal' : '');
+    document.getElementById('tt-dates').innerHTML = `Start: ${d.started}<br>Zamknięty: ${d.closedLabel}`;
+    document.getElementById('tt-mr').textContent = mr !== null ? `Moving Range: ${mr}` : '';
+    const ttSig = document.getElementById('tt-signal');
+    if (sig) { ttSig.style.display = 'block'; ttSig.textContent = '⚠ Poza granicami kontrolnymi'; }
+    else ttSig.style.display = 'none';
+
+    tooltip.classList.add('visible');
+    let tx = e.clientX + 14, ty = e.clientY - 10;
+    if (tx + 200 > window.innerWidth) tx = e.clientX - 200;
+    tooltip.style.left = tx + 'px'; tooltip.style.top = ty + 'px';
+  } else tooltip.classList.remove('visible');
+});
+canvas.addEventListener('mouseleave', () => { hoveredIdx = -1; draw(); tooltip.classList.remove('visible'); });
+
+// ── Init ──
+window.addEventListener('resize', () => { resize(); draw(); });
+resize(); draw();
+</script>
+</body>
+</html>
