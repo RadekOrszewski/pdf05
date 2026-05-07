@@ -1,3 +1,462 @@
-Lubię Start Treka
-i Star Wars w sumie też :)
-Star Gate suxx
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lead Times — Scatterplot Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0a0a0f;
+    --surface:#12121a;
+    --surface2:#1a1a26;
+    --border:#252535;
+    --text:#e0e0ec;
+    --text-dim:#7a7a92;
+    --text-muted:#4a4a5e;
+    --s-color:#22d3ee;
+    --s-glow:rgba(34,211,238,.25);
+    --m-color:#f59e0b;
+    --m-glow:rgba(245,158,11,.25);
+    --l-color:#f43f5e;
+    --l-glow:rgba(244,63,94,.25);
+    --p50:#4ade80;
+    --p85:#facc15;
+    --p95:#ef4444;
+    --grid:rgba(255,255,255,.04);
+  }
+  html{font-size:14px}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'DM Sans',sans-serif;
+    min-height:100vh;
+    overflow-x:hidden;
+  }
+  body::before{
+    content:'';position:fixed;inset:0;
+    background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(34,211,238,.04),transparent),
+               radial-gradient(ellipse 60% 40% at 80% 100%,rgba(244,63,94,.03),transparent);
+    pointer-events:none;z-index:0;
+  }
+  .wrapper{
+    position:relative;z-index:1;
+    max-width:1100px;margin:0 auto;padding:2.5rem 2rem;
+  }
+
+  /* Header */
+  .header{margin-bottom:2rem}
+  .header h1{
+    font-family:'JetBrains Mono',monospace;
+    font-weight:700;font-size:1.6rem;
+    letter-spacing:-.02em;
+    background:linear-gradient(135deg,#e0e0ec 30%,#22d3ee 100%);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  }
+  .header p{color:var(--text-dim);margin-top:.35rem;font-size:.85rem}
+
+  /* Stats bar */
+  .stats-bar{
+    display:flex;gap:1rem;margin-bottom:1.8rem;flex-wrap:wrap;
+  }
+  .stat-card{
+    flex:1;min-width:140px;
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:10px;padding:1rem 1.2rem;
+    position:relative;overflow:hidden;
+  }
+  .stat-card::after{
+    content:'';position:absolute;top:0;left:0;right:0;height:2px;
+    border-radius:10px 10px 0 0;
+  }
+  .stat-card.p50::after{background:var(--p50)}
+  .stat-card.p85::after{background:var(--p85)}
+  .stat-card.p95::after{background:var(--p95)}
+  .stat-card.total::after{background:var(--s-color)}
+  .stat-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-dim);font-family:'JetBrains Mono',monospace}
+  .stat-value{font-size:1.7rem;font-weight:700;font-family:'JetBrains Mono',monospace;margin-top:.2rem}
+  .stat-card.p50 .stat-value{color:var(--p50)}
+  .stat-card.p85 .stat-value{color:var(--p85)}
+  .stat-card.p95 .stat-value{color:var(--p95)}
+  .stat-card.total .stat-value{color:var(--text)}
+  .stat-unit{font-size:.75rem;color:var(--text-dim);font-weight:400}
+
+  /* Controls */
+  .controls{
+    display:flex;align-items:center;gap:.8rem;margin-bottom:1.5rem;flex-wrap:wrap;
+  }
+  .toggle-group{display:flex;gap:0}
+  .toggle-btn{
+    font-family:'JetBrains Mono',monospace;font-size:.72rem;
+    padding:.45rem .9rem;
+    background:var(--surface);border:1px solid var(--border);
+    color:var(--text-dim);cursor:pointer;
+    transition:all .2s;letter-spacing:.03em;
+    text-transform:uppercase;
+  }
+  .toggle-btn:first-child{border-radius:6px 0 0 6px}
+  .toggle-btn:last-child{border-radius:0 6px 6px 0}
+  .toggle-btn:not(:first-child){border-left:none}
+  .toggle-btn.active{color:#fff;border-color:transparent}
+  .toggle-btn.active[data-size="S"]{background:color-mix(in srgb,var(--s-color) 55%,#000)}
+  .toggle-btn.active[data-size="M"]{background:color-mix(in srgb,var(--m-color) 55%,#000)}
+  .toggle-btn.active[data-size="L"]{background:color-mix(in srgb,var(--l-color) 55%,#000)}
+
+  .pctl-toggles{display:flex;gap:.5rem;margin-left:auto}
+  .pctl-btn{
+    font-family:'JetBrains Mono',monospace;font-size:.7rem;
+    padding:.4rem .7rem;border-radius:6px;
+    border:1px solid var(--border);background:var(--surface);
+    color:var(--text-dim);cursor:pointer;transition:all .2s;
+  }
+  .pctl-btn.active{color:#fff}
+  .pctl-btn[data-p="50"].active{border-color:var(--p50);color:var(--p50);background:rgba(74,222,128,.08)}
+  .pctl-btn[data-p="85"].active{border-color:var(--p85);color:var(--p85);background:rgba(250,204,21,.08)}
+  .pctl-btn[data-p="95"].active{border-color:var(--p95);color:var(--p95);background:rgba(239,68,68,.08)}
+
+  /* Chart */
+  .chart-container{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:1.5rem 1.5rem 1rem;
+    position:relative;
+  }
+  .chart-area{position:relative;width:100%;height:420px}
+  canvas{display:block;width:100%!important;height:100%!important}
+
+  /* Tooltip */
+  .tooltip{
+    position:fixed;
+    background:var(--surface2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:.65rem .85rem;
+    pointer-events:none;
+    opacity:0;transition:opacity .15s;
+    z-index:100;
+    font-size:.78rem;
+    box-shadow:0 8px 32px rgba(0,0,0,.5);
+    min-width:160px;
+  }
+  .tooltip.visible{opacity:1}
+  .tooltip .tt-date{color:var(--text-dim);font-size:.68rem;margin-bottom:.3rem;font-family:'JetBrains Mono',monospace}
+  .tooltip .tt-lead{font-size:1.15rem;font-weight:700;font-family:'JetBrains Mono',monospace}
+  .tooltip .tt-size{
+    display:inline-block;padding:.1rem .4rem;border-radius:4px;
+    font-size:.65rem;font-weight:600;margin-top:.25rem;
+    font-family:'JetBrains Mono',monospace;letter-spacing:.05em;
+  }
+  .tt-size.S{background:var(--s-glow);color:var(--s-color)}
+  .tt-size.M{background:var(--m-glow);color:var(--m-color)}
+  .tt-size.L{background:var(--l-glow);color:var(--l-color)}
+
+  /* Legend */
+  .legend{
+    display:flex;gap:1.5rem;margin-top:1rem;justify-content:center;
+  }
+  .legend-item{display:flex;align-items:center;gap:.4rem;font-size:.75rem;color:var(--text-dim)}
+  .legend-dot{width:10px;height:10px;border-radius:50%}
+  .legend-dot.s{background:var(--s-color)}
+  .legend-dot.m{background:var(--m-color)}
+  .legend-dot.l{background:var(--l-color)}
+
+  @media(max-width:640px){
+    .wrapper{padding:1.5rem 1rem}
+    .chart-area{height:300px}
+    .stats-bar{gap:.6rem}
+    .stat-card{padding:.7rem .9rem}
+    .stat-value{font-size:1.3rem}
+    .controls{gap:.5rem}
+    .pctl-toggles{margin-left:0;margin-top:.4rem;width:100%}
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <h1>Lead Times · 2024–25</h1>
+    <p>Scatterplot czasów realizacji z percentylami · dane: Lead_Times_-_2024-25</p>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-card total">
+      <div class="stat-label">Elementów</div>
+      <div class="stat-value" id="st-total">36</div>
+    </div>
+    <div class="stat-card p50">
+      <div class="stat-label">50. percentyl</div>
+      <div class="stat-value" id="st-p50">— <span class="stat-unit">dni</span></div>
+    </div>
+    <div class="stat-card p85">
+      <div class="stat-label">85. percentyl</div>
+      <div class="stat-value" id="st-p85">— <span class="stat-unit">dni</span></div>
+    </div>
+    <div class="stat-card p95">
+      <div class="stat-label">95. percentyl</div>
+      <div class="stat-value" id="st-p95">— <span class="stat-unit">dni</span></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="toggle-group">
+      <button class="toggle-btn active" data-size="S">S</button>
+      <button class="toggle-btn active" data-size="M">M</button>
+      <button class="toggle-btn active" data-size="L">L</button>
+    </div>
+    <div class="pctl-toggles">
+      <button class="pctl-btn" data-p="50">P50</button>
+      <button class="pctl-btn" data-p="85">P85</button>
+      <button class="pctl-btn" data-p="95">P95</button>
+    </div>
+  </div>
+
+  <div class="chart-container">
+    <div class="chart-area">
+      <canvas id="chart"></canvas>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-dot s"></span> Small</div>
+      <div class="legend-item"><span class="legend-dot m"></span> Medium</div>
+      <div class="legend-item"><span class="legend-dot l"></span> Large</div>
+    </div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip">
+  <div class="tt-date" id="tt-date"></div>
+  <div class="tt-lead" id="tt-lead"></div>
+  <div class="tt-size" id="tt-size"></div>
+</div>
+
+<script>
+const DATA = [{"date":"2024-07-15","dateLabel":"15 Lipca 2024","size":"S","leadTime":49},{"date":"2024-08-22","dateLabel":"22 Sierpnia 2024","size":"S","leadTime":48},{"date":"2024-09-10","dateLabel":"10 Września 2024","size":"S","leadTime":87},{"date":"2024-09-25","dateLabel":"25 Września 2024","size":"M","leadTime":57},{"date":"2024-10-05","dateLabel":"5 Października 2024","size":"M","leadTime":148},{"date":"2024-10-14","dateLabel":"14 Października 2024","size":"S","leadTime":53},{"date":"2024-10-28","dateLabel":"28 Października 2024","size":"S","leadTime":45},{"date":"2024-11-18","dateLabel":"18 Listopada 2024","size":"M","leadTime":145},{"date":"2024-12-04","dateLabel":"4 Grudnia 2024","size":"L","leadTime":105},{"date":"2025-01-08","dateLabel":"8 Stycznia 2025","size":"S","leadTime":5},{"date":"2025-01-20","dateLabel":"20 Stycznia 2025","size":"L","leadTime":163},{"date":"2025-02-14","dateLabel":"14 Lutego 2025","size":"S","leadTime":43},{"date":"2025-02-26","dateLabel":"26 Lutego 2025","size":"M","leadTime":415},{"date":"2025-03-15","dateLabel":"15 Marca 2025","size":"L","leadTime":123},{"date":"2025-04-10","dateLabel":"10 Kwietnia 2025","size":"M","leadTime":103},{"date":"2025-05-05","dateLabel":"5 Maja 2025","size":"L","leadTime":104},{"date":"2025-06-12","dateLabel":"12 Czerwca 2025","size":"L","leadTime":302},{"date":"2025-06-25","dateLabel":"25 Czerwca 2025","size":"L","leadTime":158},{"date":"2025-07-02","dateLabel":"2 Lipca 2025","size":"L","leadTime":98},{"date":"2025-07-11","dateLabel":"11 Lipca 2025","size":"S","leadTime":52},{"date":"2025-07-18","dateLabel":"18 Lipca 2025","size":"M","leadTime":95},{"date":"2025-07-29","dateLabel":"29 Lipca 2025","size":"S","leadTime":70},{"date":"2025-08-03","dateLabel":"3 Sierpnia 2025","size":"M","leadTime":95},{"date":"2025-08-14","dateLabel":"14 Sierpnia 2025","size":"M","leadTime":101},{"date":"2025-08-21","dateLabel":"21 Sierpnia 2025","size":"M","leadTime":57},{"date":"2025-08-29","dateLabel":"29 Sierpnia 2025","size":"M","leadTime":57},{"date":"2025-09-08","dateLabel":"8 Września 2025","size":"S","leadTime":53},{"date":"2025-09-22","dateLabel":"22 Września 2025","size":"L","leadTime":137},{"date":"2025-10-04","dateLabel":"4 Października 2025","size":"S","leadTime":73},{"date":"2025-10-12","dateLabel":"12 Października 2025","size":"M","leadTime":60},{"date":"2025-10-19","dateLabel":"19 Października 2025","size":"S","leadTime":126},{"date":"2025-10-27","dateLabel":"27 Października 2025","size":"M","leadTime":57},{"date":"2025-11-05","dateLabel":"5 Listopada 2025","size":"L","leadTime":124},{"date":"2025-11-15","dateLabel":"15 Listopada 2025","size":"M","leadTime":75},{"date":"2025-11-25","dateLabel":"25 Listopada 2025","size":"M","leadTime":89},{"date":"2025-12-10","dateLabel":"10 Grudnia 2025","size":"S","leadTime":44}];
+
+const COLORS = {
+  S: { fill: '#22d3ee', glow: 'rgba(34,211,238,.3)' },
+  M: { fill: '#f59e0b', glow: 'rgba(245,158,11,.3)' },
+  L: { fill: '#f43f5e', glow: 'rgba(244,63,94,.3)' },
+};
+const PCOLORS = { 50: '#4ade80', 85: '#facc15', 95: '#ef4444' };
+
+// State
+let activeSizes = new Set(['S','M','L']);
+let activePercentiles = new Set();
+let hoveredIdx = -1;
+
+// Compute percentile (interpolated)
+function percentile(arr, p) {
+  const s = [...arr].sort((a,b) => a - b);
+  const i = (p / 100) * (s.length - 1);
+  const lo = Math.floor(i), hi = Math.ceil(i);
+  return lo === hi ? s[lo] : s[lo] + (s[hi] - s[lo]) * (i - lo);
+}
+
+function getFiltered() {
+  return DATA.filter(d => activeSizes.has(d.size));
+}
+
+function computePercentiles(data) {
+  const vals = data.map(d => d.leadTime);
+  if (vals.length === 0) return { 50: 0, 85: 0, 95: 0 };
+  return { 50: percentile(vals, 50), 85: percentile(vals, 85), 95: percentile(vals, 95) };
+}
+
+// Canvas setup
+const canvas = document.getElementById('chart');
+const ctx = canvas.getContext('2d');
+let W, H;
+const PAD = { top: 30, right: 30, bottom: 50, left: 60 };
+
+function resize() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  W = rect.width; H = rect.height;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function dateToTs(s) { return new Date(s).getTime(); }
+
+function draw() {
+  const data = getFiltered();
+  const pctls = computePercentiles(data);
+
+  // Update stat cards
+  document.getElementById('st-total').textContent = data.length;
+  document.getElementById('st-p50').innerHTML = `${Math.round(pctls[50])} <span class="stat-unit">dni</span>`;
+  document.getElementById('st-p85').innerHTML = `${Math.round(pctls[85])} <span class="stat-unit">dni</span>`;
+  document.getElementById('st-p95').innerHTML = `${Math.round(pctls[95])} <span class="stat-unit">dni</span>`;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Determine ranges from ALL data (stable axes)
+  const allTs = DATA.map(d => dateToTs(d.date));
+  const allLt = DATA.map(d => d.leadTime);
+  const xMin = Math.min(...allTs), xMax = Math.max(...allTs);
+  const yMax = Math.max(...allLt) * 1.08;
+
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+  const xScale = v => PAD.left + ((v - xMin) / (xMax - xMin)) * plotW;
+  const yScale = v => PAD.top + plotH - (v / yMax) * plotH;
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,.04)';
+  ctx.lineWidth = 1;
+  const yTicks = [0, 50, 100, 150, 200, 250, 300, 350, 400, 450];
+  for (const v of yTicks) {
+    if (v > yMax) continue;
+    const y = Math.round(yScale(v)) + .5;
+    ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(W - PAD.right, y); ctx.stroke();
+    ctx.fillStyle = '#4a4a5e';
+    ctx.font = '11px "JetBrains Mono", monospace';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(v, PAD.left - 10, y);
+  }
+
+  // X axis labels (months)
+  const months = [];
+  let d0 = new Date(xMin); d0.setDate(1);
+  while (d0.getTime() <= xMax + 30*86400000) {
+    months.push(new Date(d0));
+    d0.setMonth(d0.getMonth() + 2);
+  }
+  ctx.fillStyle = '#4a4a5e';
+  ctx.font = '11px "JetBrains Mono", monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const mNames = ['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+  for (const m of months) {
+    const x = xScale(m.getTime());
+    if (x < PAD.left || x > W - PAD.right) continue;
+    ctx.fillText(`${mNames[m.getMonth()]} ${m.getFullYear().toString().slice(2)}`, x, H - PAD.bottom + 12);
+    ctx.strokeStyle = 'rgba(255,255,255,.03)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, H - PAD.bottom); ctx.stroke();
+  }
+
+  // Y axis label
+  ctx.save();
+  ctx.fillStyle = '#5a5a72';
+  ctx.font = '600 11px "JetBrains Mono", monospace';
+  ctx.translate(16, PAD.top + plotH / 2);
+  ctx.rotate(-Math.PI/2);
+  ctx.textAlign = 'center';
+  ctx.fillText('CZAS REALIZACJI (dni)', 0, 0);
+  ctx.restore();
+
+  // Percentile lines
+  for (const p of [50, 85, 95]) {
+    if (!activePercentiles.has(p)) continue;
+    const y = yScale(pctls[p]);
+    ctx.strokeStyle = PCOLORS[p];
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(W - PAD.right, y); ctx.stroke();
+    ctx.setLineDash([]);
+    // Label
+    ctx.fillStyle = PCOLORS[p];
+    ctx.font = '600 10px "JetBrains Mono", monospace';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+    ctx.fillText(`P${p}: ${Math.round(pctls[p])} dni`, W - PAD.right - 4, y - 4);
+  }
+
+  // Draw dots
+  const dotPositions = [];
+  data.forEach((d, i) => {
+    const x = xScale(dateToTs(d.date));
+    const y = yScale(d.leadTime);
+    const c = COLORS[d.size];
+    const r = hoveredIdx === i ? 8 : 6;
+
+    // Glow
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, r * 2.5);
+    grad.addColorStop(0, c.glow);
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(x, y, r * 2.5, 0, Math.PI*2); ctx.fill();
+
+    // Dot
+    ctx.fillStyle = c.fill;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+
+    // Outline on hover
+    if (hoveredIdx === i) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(x, y, r + 2, 0, Math.PI*2); ctx.stroke();
+    }
+
+    dotPositions.push({ x, y, r: 12, idx: i, data: d });
+  });
+
+  window._dots = dotPositions;
+}
+
+// Tooltip
+const tooltip = document.getElementById('tooltip');
+const ttDate = document.getElementById('tt-date');
+const ttLead = document.getElementById('tt-lead');
+const ttSize = document.getElementById('tt-size');
+
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  let found = -1;
+  for (const dot of (window._dots || [])) {
+    const dx = mx - dot.x, dy = my - dot.y;
+    if (dx*dx + dy*dy < dot.r * dot.r) { found = dot.idx; break; }
+  }
+  if (found !== hoveredIdx) {
+    hoveredIdx = found;
+    draw();
+  }
+  if (found >= 0) {
+    const d = getFiltered()[found];
+    ttDate.textContent = d.dateLabel;
+    ttLead.textContent = d.leadTime + ' dni';
+    ttSize.textContent = 'Rozmiar ' + d.size;
+    ttSize.className = 'tt-size ' + d.size;
+    tooltip.classList.add('visible');
+    let tx = e.clientX + 14, ty = e.clientY - 10;
+    if (tx + 180 > window.innerWidth) tx = e.clientX - 180;
+    tooltip.style.left = tx + 'px';
+    tooltip.style.top = ty + 'px';
+  } else {
+    tooltip.classList.remove('visible');
+  }
+});
+canvas.addEventListener('mouseleave', () => {
+  hoveredIdx = -1; draw();
+  tooltip.classList.remove('visible');
+});
+
+// Size toggles
+document.querySelectorAll('.toggle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const s = btn.dataset.size;
+    btn.classList.toggle('active');
+    if (activeSizes.has(s)) activeSizes.delete(s); else activeSizes.add(s);
+    hoveredIdx = -1;
+    draw();
+  });
+});
+
+// Percentile toggles
+document.querySelectorAll('.pctl-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const p = parseInt(btn.dataset.p);
+    btn.classList.toggle('active');
+    if (activePercentiles.has(p)) activePercentiles.delete(p); else activePercentiles.add(p);
+    draw();
+  });
+});
+
+// Init
+window.addEventListener('resize', () => { resize(); draw(); });
+resize();
+draw();
+</script>
+</body>
+</html>
