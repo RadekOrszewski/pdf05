@@ -4,199 +4,127 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lead Times — Scatterplot Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  :root{
-    --bg:#0a0a0f;
-    --surface:#12121a;
-    --surface2:#1a1a26;
-    --border:#252535;
-    --text:#e0e0ec;
-    --text-dim:#7a7a92;
-    --text-muted:#4a4a5e;
-    --s-color:#22d3ee;
-    --s-glow:rgba(34,211,238,.25);
-    --m-color:#f59e0b;
-    --m-glow:rgba(245,158,11,.25);
-    --l-color:#f43f5e;
-    --l-glow:rgba(244,63,94,.25);
-    --p50:#4ade80;
-    --p85:#facc15;
-    --p95:#ef4444;
-    --grid:rgba(255,255,255,.04);
-  }
-  html{font-size:14px}
-  body{
-    background:var(--bg);
-    color:var(--text);
-    font-family:'DM Sans',sans-serif;
-    min-height:100vh;
-    overflow-x:hidden;
-  }
-  body::before{
-    content:'';position:fixed;inset:0;
-    background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(34,211,238,.04),transparent),
-               radial-gradient(ellipse 60% 40% at 80% 100%,rgba(244,63,94,.03),transparent);
-    pointer-events:none;z-index:0;
-  }
-  .wrapper{
-    position:relative;z-index:1;
-    max-width:1100px;margin:0 auto;padding:2.5rem 2rem;
-  }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0f;--surface:#12121a;--surface2:#1a1a26;--border:#252535;
+  --text:#e0e0ec;--text-dim:#7a7a92;--text-muted:#4a4a5e;
+  --s-color:#22d3ee;--s-glow:rgba(34,211,238,.25);
+  --m-color:#f59e0b;--m-glow:rgba(245,158,11,.25);
+  --l-color:#f43f5e;--l-glow:rgba(244,63,94,.25);
+  --p50:#4ade80;--p85:#facc15;--p95:#ef4444;
+  --accent:#6366f1;--danger:#ef4444;--success:#22c55e;
+}
+html{font-size:14px}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(34,211,238,.04),transparent),radial-gradient(ellipse 60% 40% at 80% 100%,rgba(244,63,94,.03),transparent);pointer-events:none;z-index:0}
+.wrapper{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:2.5rem 2rem}
+.header{margin-bottom:2rem}
+.header h1{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:1.6rem;letter-spacing:-.02em;background:linear-gradient(135deg,#e0e0ec 30%,#22d3ee 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{color:var(--text-dim);margin-top:.35rem;font-size:.85rem}
 
-  /* Header */
-  .header{margin-bottom:2rem}
-  .header h1{
-    font-family:'JetBrains Mono',monospace;
-    font-weight:700;font-size:1.6rem;
-    letter-spacing:-.02em;
-    background:linear-gradient(135deg,#e0e0ec 30%,#22d3ee 100%);
-    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-  }
-  .header p{color:var(--text-dim);margin-top:.35rem;font-size:.85rem}
+.stats-bar{display:flex;gap:1rem;margin-bottom:1.8rem;flex-wrap:wrap}
+.stat-card{flex:1;min-width:110px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem 1.2rem;position:relative;overflow:hidden}
+.stat-card::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:10px 10px 0 0}
+.stat-card.p50::after{background:var(--p50)}.stat-card.p85::after{background:var(--p85)}.stat-card.p95::after{background:var(--p95)}.stat-card.total::after{background:var(--s-color)}.stat-card.removed::after{background:var(--danger)}
+.stat-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-dim);font-family:'JetBrains Mono',monospace}
+.stat-value{font-size:1.7rem;font-weight:700;font-family:'JetBrains Mono',monospace;margin-top:.2rem}
+.stat-card.p50 .stat-value{color:var(--p50)}.stat-card.p85 .stat-value{color:var(--p85)}.stat-card.p95 .stat-value{color:var(--p95)}.stat-card.total .stat-value{color:var(--text)}.stat-card.removed .stat-value{color:var(--danger)}
+.stat-unit{font-size:.75rem;color:var(--text-dim);font-weight:400}
 
-  /* Stats bar */
-  .stats-bar{
-    display:flex;gap:1rem;margin-bottom:1.8rem;flex-wrap:wrap;
-  }
-  .stat-card{
-    flex:1;min-width:140px;
-    background:var(--surface);border:1px solid var(--border);
-    border-radius:10px;padding:1rem 1.2rem;
-    position:relative;overflow:hidden;
-  }
-  .stat-card::after{
-    content:'';position:absolute;top:0;left:0;right:0;height:2px;
-    border-radius:10px 10px 0 0;
-  }
-  .stat-card.p50::after{background:var(--p50)}
-  .stat-card.p85::after{background:var(--p85)}
-  .stat-card.p95::after{background:var(--p95)}
-  .stat-card.total::after{background:var(--s-color)}
-  .stat-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-dim);font-family:'JetBrains Mono',monospace}
-  .stat-value{font-size:1.7rem;font-weight:700;font-family:'JetBrains Mono',monospace;margin-top:.2rem}
-  .stat-card.p50 .stat-value{color:var(--p50)}
-  .stat-card.p85 .stat-value{color:var(--p85)}
-  .stat-card.p95 .stat-value{color:var(--p95)}
-  .stat-card.total .stat-value{color:var(--text)}
-  .stat-unit{font-size:.75rem;color:var(--text-dim);font-weight:400}
+.controls{display:flex;align-items:center;gap:.8rem;margin-bottom:1rem;flex-wrap:wrap}
+.toggle-group{display:flex;gap:0}
+.toggle-btn{font-family:'JetBrains Mono',monospace;font-size:.72rem;padding:.45rem .9rem;background:var(--surface);border:1px solid var(--border);color:var(--text-dim);cursor:pointer;transition:all .2s;letter-spacing:.03em;text-transform:uppercase}
+.toggle-btn:first-child{border-radius:6px 0 0 6px}.toggle-btn:last-child{border-radius:0 6px 6px 0}.toggle-btn:not(:first-child){border-left:none}
+.toggle-btn.active{color:#fff;border-color:transparent}
+.toggle-btn.active[data-size="S"]{background:color-mix(in srgb,var(--s-color) 55%,#000)}
+.toggle-btn.active[data-size="M"]{background:color-mix(in srgb,var(--m-color) 55%,#000)}
+.toggle-btn.active[data-size="L"]{background:color-mix(in srgb,var(--l-color) 55%,#000)}
+.pctl-toggles{display:flex;gap:.5rem;margin-left:auto}
+.pctl-btn{font-family:'JetBrains Mono',monospace;font-size:.7rem;padding:.4rem .7rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);cursor:pointer;transition:all .2s}
+.pctl-btn.active{color:#fff}
+.pctl-btn[data-p="50"].active{border-color:var(--p50);color:var(--p50);background:rgba(74,222,128,.08)}
+.pctl-btn[data-p="85"].active{border-color:var(--p85);color:var(--p85);background:rgba(250,204,21,.08)}
+.pctl-btn[data-p="95"].active{border-color:var(--p95);color:var(--p95);background:rgba(239,68,68,.08)}
 
-  /* Controls */
-  .controls{
-    display:flex;align-items:center;gap:.8rem;margin-bottom:1.5rem;flex-wrap:wrap;
-  }
-  .toggle-group{display:flex;gap:0}
-  .toggle-btn{
-    font-family:'JetBrains Mono',monospace;font-size:.72rem;
-    padding:.45rem .9rem;
-    background:var(--surface);border:1px solid var(--border);
-    color:var(--text-dim);cursor:pointer;
-    transition:all .2s;letter-spacing:.03em;
-    text-transform:uppercase;
-  }
-  .toggle-btn:first-child{border-radius:6px 0 0 6px}
-  .toggle-btn:last-child{border-radius:0 6px 6px 0}
-  .toggle-btn:not(:first-child){border-left:none}
-  .toggle-btn.active{color:#fff;border-color:transparent}
-  .toggle-btn.active[data-size="S"]{background:color-mix(in srgb,var(--s-color) 55%,#000)}
-  .toggle-btn.active[data-size="M"]{background:color-mix(in srgb,var(--m-color) 55%,#000)}
-  .toggle-btn.active[data-size="L"]{background:color-mix(in srgb,var(--l-color) 55%,#000)}
+.range-row{display:flex;align-items:center;gap:.6rem;margin-bottom:1.5rem;flex-wrap:wrap}
+.range-label{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em}
+.range-input{font-family:'JetBrains Mono',monospace;font-size:.8rem;padding:.4rem .6rem;width:100px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);outline:none;transition:border-color .2s}
+.range-input:focus{border-color:var(--accent)}
+.range-input::placeholder{color:var(--text-muted);font-size:.72rem}
+.range-input.invalid{border-color:var(--danger);color:var(--danger)}
+.range-hint{font-size:.65rem;color:var(--text-muted);font-family:'JetBrains Mono',monospace}
 
-  .pctl-toggles{display:flex;gap:.5rem;margin-left:auto}
-  .pctl-btn{
-    font-family:'JetBrains Mono',monospace;font-size:.7rem;
-    padding:.4rem .7rem;border-radius:6px;
-    border:1px solid var(--border);background:var(--surface);
-    color:var(--text-dim);cursor:pointer;transition:all .2s;
-  }
-  .pctl-btn.active{color:#fff}
-  .pctl-btn[data-p="50"].active{border-color:var(--p50);color:var(--p50);background:rgba(74,222,128,.08)}
-  .pctl-btn[data-p="85"].active{border-color:var(--p85);color:var(--p85);background:rgba(250,204,21,.08)}
-  .pctl-btn[data-p="95"].active{border-color:var(--p95);color:var(--p95);background:rgba(239,68,68,.08)}
+.chart-container{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.5rem 1.5rem 1rem;position:relative}
+.chart-area{position:relative;width:100%;height:420px}
+canvas{display:block;width:100%!important;height:100%!important;cursor:crosshair}
+.legend{display:flex;gap:1.5rem;margin-top:1rem;justify-content:center}
+.legend-item{display:flex;align-items:center;gap:.4rem;font-size:.75rem;color:var(--text-dim)}
+.legend-dot{width:10px;height:10px;border-radius:50%}
+.legend-dot.s{background:var(--s-color)}.legend-dot.m{background:var(--m-color)}.legend-dot.l{background:var(--l-color)}
 
-  /* Chart */
-  .chart-container{
-    background:var(--surface);
-    border:1px solid var(--border);
-    border-radius:12px;
-    padding:1.5rem 1.5rem 1rem;
-    position:relative;
-  }
-  .chart-area{position:relative;width:100%;height:420px}
-  canvas{display:block;width:100%!important;height:100%!important}
+.removed-section{margin-top:1.5rem}
+.section-title{font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem;display:flex;align-items:center;gap:.5rem}
+.section-title .count{background:var(--danger);color:#fff;font-size:.6rem;padding:.1rem .4rem;border-radius:4px}
+.removed-list{display:flex;flex-wrap:wrap;gap:.4rem}
+.removed-chip{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .6rem;border-radius:6px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--text-dim);cursor:pointer;transition:all .2s}
+.removed-chip:hover{background:rgba(239,68,68,.15);color:var(--text);border-color:rgba(239,68,68,.4)}
+.removed-chip .ri{color:var(--success);font-weight:700;font-size:.8rem}
+.restore-all-btn{font-family:'JetBrains Mono',monospace;font-size:.68rem;padding:.35rem .7rem;border-radius:6px;border:1px solid rgba(74,222,128,.3);background:rgba(74,222,128,.06);color:var(--success);cursor:pointer;transition:all .2s;margin-left:.5rem}
+.restore-all-btn:hover{background:rgba(74,222,128,.15);border-color:rgba(74,222,128,.5)}
 
-  /* Tooltip */
-  .tooltip{
-    position:fixed;
-    background:var(--surface2);
-    border:1px solid var(--border);
-    border-radius:8px;
-    padding:.65rem .85rem;
-    pointer-events:none;
-    opacity:0;transition:opacity .15s;
-    z-index:100;
-    font-size:.78rem;
-    box-shadow:0 8px 32px rgba(0,0,0,.5);
-    min-width:160px;
-  }
-  .tooltip.visible{opacity:1}
-  .tooltip .tt-date{color:var(--text-dim);font-size:.68rem;margin-bottom:.3rem;font-family:'JetBrains Mono',monospace}
-  .tooltip .tt-lead{font-size:1.15rem;font-weight:700;font-family:'JetBrains Mono',monospace}
-  .tooltip .tt-size{
-    display:inline-block;padding:.1rem .4rem;border-radius:4px;
-    font-size:.65rem;font-weight:600;margin-top:.25rem;
-    font-family:'JetBrains Mono',monospace;letter-spacing:.05em;
-  }
-  .tt-size.S{background:var(--s-glow);color:var(--s-color)}
-  .tt-size.M{background:var(--m-glow);color:var(--m-color)}
-  .tt-size.L{background:var(--l-glow);color:var(--l-color)}
+.add-panel{margin-top:1.5rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.2rem 1.5rem}
+.add-panel .section-title{margin-bottom:1rem}
+.add-row{display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.8rem}
+.field{display:flex;flex-direction:column;gap:.25rem}
+.field label{font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em}
+.field input,.field select{font-family:'JetBrains Mono',monospace;font-size:.8rem;padding:.4rem .6rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);outline:none;transition:border-color .2s}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.field select{cursor:pointer;appearance:none;padding-right:1.5rem;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%237a7a92'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .5rem center}
+.field select option{background:var(--surface);color:var(--text)}
+.btn{font-family:'JetBrains Mono',monospace;font-size:.72rem;padding:.45rem .9rem;border-radius:6px;border:1px solid;cursor:pointer;transition:all .2s;text-transform:uppercase;letter-spacing:.04em}
+.btn-primary{background:rgba(99,102,241,.12);border-color:rgba(99,102,241,.35);color:var(--accent)}
+.btn-primary:hover{background:rgba(99,102,241,.22);border-color:rgba(99,102,241,.55)}
+.btn-import{background:rgba(34,211,238,.08);border-color:rgba(34,211,238,.25);color:var(--s-color)}
+.btn-import:hover{background:rgba(34,211,238,.16);border-color:rgba(34,211,238,.45)}
+.import-sep{display:flex;align-items:center;gap:.8rem;margin-top:.3rem}
+.import-sep .line{flex:1;height:1px;background:var(--border)}
+.import-sep .or{font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--text-muted);text-transform:uppercase}
+.file-input-wrap{position:relative;display:inline-block}
+.file-input-wrap input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);font-family:'JetBrains Mono',monospace;font-size:.75rem;padding:.55rem 1.2rem;border-radius:8px;z-index:200;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.success{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:var(--success)}
+.toast.error{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:var(--danger)}
+.toast.visible{opacity:1}
 
-  /* Legend */
-  .legend{
-    display:flex;gap:1.5rem;margin-top:1rem;justify-content:center;
-  }
-  .legend-item{display:flex;align-items:center;gap:.4rem;font-size:.75rem;color:var(--text-dim)}
-  .legend-dot{width:10px;height:10px;border-radius:50%}
-  .legend-dot.s{background:var(--s-color)}
-  .legend-dot.m{background:var(--m-color)}
-  .legend-dot.l{background:var(--l-color)}
+.tooltip{position:fixed;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.65rem .85rem;pointer-events:none;opacity:0;transition:opacity .15s;z-index:100;font-size:.78rem;box-shadow:0 8px 32px rgba(0,0,0,.5);min-width:175px}
+.tooltip.visible{opacity:1}
+.tooltip .tt-date{color:var(--text-dim);font-size:.68rem;margin-bottom:.3rem;font-family:'JetBrains Mono',monospace}
+.tooltip .tt-lead{font-size:1.15rem;font-weight:700;font-family:'JetBrains Mono',monospace}
+.tooltip .tt-size{display:inline-block;padding:.1rem .4rem;border-radius:4px;font-size:.65rem;font-weight:600;margin-top:.25rem;font-family:'JetBrains Mono',monospace;letter-spacing:.05em}
+.tt-size.S{background:var(--s-glow);color:var(--s-color)}.tt-size.M{background:var(--m-glow);color:var(--m-color)}.tt-size.L{background:var(--l-glow);color:var(--l-color)}
+.tt-hint{font-size:.6rem;color:var(--text-muted);margin-top:.35rem;font-family:'JetBrains Mono',monospace;border-top:1px solid var(--border);padding-top:.3rem}
 
-  @media(max-width:640px){
-    .wrapper{padding:1.5rem 1rem}
-    .chart-area{height:300px}
-    .stats-bar{gap:.6rem}
-    .stat-card{padding:.7rem .9rem}
-    .stat-value{font-size:1.3rem}
-    .controls{gap:.5rem}
-    .pctl-toggles{margin-left:0;margin-top:.4rem;width:100%}
-  }
+@media(max-width:640px){
+  .wrapper{padding:1.5rem 1rem}.chart-area{height:300px}.stats-bar{gap:.6rem}.stat-card{padding:.7rem .9rem}.stat-value{font-size:1.3rem}.controls,.range-row{gap:.5rem}.pctl-toggles{margin-left:0;width:100%}
+}
 </style>
 </head>
 <body>
 <div class="wrapper">
   <div class="header">
     <h1>Lead Times · 2024–25</h1>
-    <p>Scatterplot czasów realizacji z percentylami · dane: Lead_Times_-_2024-25</p>
+    <p>Scatterplot czasów realizacji z percentylami · kliknij punkt aby go usunąć</p>
   </div>
 
   <div class="stats-bar">
-    <div class="stat-card total">
-      <div class="stat-label">Elementów</div>
-      <div class="stat-value" id="st-total">36</div>
-    </div>
-    <div class="stat-card p50">
-      <div class="stat-label">50. percentyl</div>
-      <div class="stat-value" id="st-p50">— <span class="stat-unit">dni</span></div>
-    </div>
-    <div class="stat-card p85">
-      <div class="stat-label">85. percentyl</div>
-      <div class="stat-value" id="st-p85">— <span class="stat-unit">dni</span></div>
-    </div>
-    <div class="stat-card p95">
-      <div class="stat-label">95. percentyl</div>
-      <div class="stat-value" id="st-p95">— <span class="stat-unit">dni</span></div>
-    </div>
+    <div class="stat-card total"><div class="stat-label">Widocznych</div><div class="stat-value" id="st-total">0</div></div>
+    <div class="stat-card removed"><div class="stat-label">Usunięte</div><div class="stat-value" id="st-removed">0</div></div>
+    <div class="stat-card p50"><div class="stat-label">50. percentyl</div><div class="stat-value" id="st-p50">—</div></div>
+    <div class="stat-card p85"><div class="stat-label">85. percentyl</div><div class="stat-value" id="st-p85">—</div></div>
+    <div class="stat-card p95"><div class="stat-label">95. percentyl</div><div class="stat-value" id="st-p95">—</div></div>
   </div>
 
   <div class="controls">
@@ -212,14 +140,46 @@
     </div>
   </div>
 
+  <div class="range-row">
+    <span class="range-label">Od:</span>
+    <input class="range-input" id="range-from" type="text" placeholder="MM/RRRR">
+    <span class="range-label">Do:</span>
+    <input class="range-input" id="range-to" type="text" placeholder="MM/RRRR">
+    <span class="range-hint">np. 01/2025 — 06/2025</span>
+  </div>
+
   <div class="chart-container">
-    <div class="chart-area">
-      <canvas id="chart"></canvas>
-    </div>
+    <div class="chart-area"><canvas id="chart"></canvas></div>
     <div class="legend">
       <div class="legend-item"><span class="legend-dot s"></span> Small</div>
       <div class="legend-item"><span class="legend-dot m"></span> Medium</div>
       <div class="legend-item"><span class="legend-dot l"></span> Large</div>
+    </div>
+  </div>
+
+  <div class="removed-section" id="removed-section" style="display:none">
+    <div class="section-title">
+      Usunięte punkty <span class="count" id="removed-count">0</span>
+      <button class="restore-all-btn" id="restore-all">↩ Przywróć wszystkie</button>
+    </div>
+    <div class="removed-list" id="removed-list"></div>
+  </div>
+
+  <div class="add-panel">
+    <div class="section-title">Dodaj dane</div>
+    <div class="add-row">
+      <div class="field"><label>Data ukończenia</label><input type="date" id="add-date"></div>
+      <div class="field"><label>Rozmiar</label><select id="add-size"><option value="S">S</option><option value="M">M</option><option value="L">L</option></select></div>
+      <div class="field"><label>Czas realizacji (dni)</label><input type="number" id="add-lead" min="1" style="width:100px"></div>
+      <button class="btn btn-primary" id="add-btn">+ Dodaj</button>
+    </div>
+    <div class="import-sep"><div class="line"></div><div class="or">lub importuj plik</div><div class="line"></div></div>
+    <div class="add-row" style="margin-top:.8rem;margin-bottom:0">
+      <div class="file-input-wrap">
+        <button class="btn btn-import" id="import-label">📄 Importuj .xlsx / .xls / .csv</button>
+        <input type="file" id="file-import" accept=".xlsx,.xls,.csv">
+      </div>
+      <span class="range-hint">Kolumny: Data ukończenia · Deklarowany rozmiar · Czas realizacji</span>
     </div>
   </div>
 </div>
@@ -228,235 +188,353 @@
   <div class="tt-date" id="tt-date"></div>
   <div class="tt-lead" id="tt-lead"></div>
   <div class="tt-size" id="tt-size"></div>
+  <div class="tt-hint">kliknij aby usunąć</div>
 </div>
+<div class="toast" id="toast"></div>
 
 <script>
-const DATA = [{"date":"2024-07-15","dateLabel":"15 Lipca 2024","size":"S","leadTime":49},{"date":"2024-08-22","dateLabel":"22 Sierpnia 2024","size":"S","leadTime":48},{"date":"2024-09-10","dateLabel":"10 Września 2024","size":"S","leadTime":87},{"date":"2024-09-25","dateLabel":"25 Września 2024","size":"M","leadTime":57},{"date":"2024-10-05","dateLabel":"5 Października 2024","size":"M","leadTime":148},{"date":"2024-10-14","dateLabel":"14 Października 2024","size":"S","leadTime":53},{"date":"2024-10-28","dateLabel":"28 Października 2024","size":"S","leadTime":45},{"date":"2024-11-18","dateLabel":"18 Listopada 2024","size":"M","leadTime":145},{"date":"2024-12-04","dateLabel":"4 Grudnia 2024","size":"L","leadTime":105},{"date":"2025-01-08","dateLabel":"8 Stycznia 2025","size":"S","leadTime":5},{"date":"2025-01-20","dateLabel":"20 Stycznia 2025","size":"L","leadTime":163},{"date":"2025-02-14","dateLabel":"14 Lutego 2025","size":"S","leadTime":43},{"date":"2025-02-26","dateLabel":"26 Lutego 2025","size":"M","leadTime":415},{"date":"2025-03-15","dateLabel":"15 Marca 2025","size":"L","leadTime":123},{"date":"2025-04-10","dateLabel":"10 Kwietnia 2025","size":"M","leadTime":103},{"date":"2025-05-05","dateLabel":"5 Maja 2025","size":"L","leadTime":104},{"date":"2025-06-12","dateLabel":"12 Czerwca 2025","size":"L","leadTime":302},{"date":"2025-06-25","dateLabel":"25 Czerwca 2025","size":"L","leadTime":158},{"date":"2025-07-02","dateLabel":"2 Lipca 2025","size":"L","leadTime":98},{"date":"2025-07-11","dateLabel":"11 Lipca 2025","size":"S","leadTime":52},{"date":"2025-07-18","dateLabel":"18 Lipca 2025","size":"M","leadTime":95},{"date":"2025-07-29","dateLabel":"29 Lipca 2025","size":"S","leadTime":70},{"date":"2025-08-03","dateLabel":"3 Sierpnia 2025","size":"M","leadTime":95},{"date":"2025-08-14","dateLabel":"14 Sierpnia 2025","size":"M","leadTime":101},{"date":"2025-08-21","dateLabel":"21 Sierpnia 2025","size":"M","leadTime":57},{"date":"2025-08-29","dateLabel":"29 Sierpnia 2025","size":"M","leadTime":57},{"date":"2025-09-08","dateLabel":"8 Września 2025","size":"S","leadTime":53},{"date":"2025-09-22","dateLabel":"22 Września 2025","size":"L","leadTime":137},{"date":"2025-10-04","dateLabel":"4 Października 2025","size":"S","leadTime":73},{"date":"2025-10-12","dateLabel":"12 Października 2025","size":"M","leadTime":60},{"date":"2025-10-19","dateLabel":"19 Października 2025","size":"S","leadTime":126},{"date":"2025-10-27","dateLabel":"27 Października 2025","size":"M","leadTime":57},{"date":"2025-11-05","dateLabel":"5 Listopada 2025","size":"L","leadTime":124},{"date":"2025-11-15","dateLabel":"15 Listopada 2025","size":"M","leadTime":75},{"date":"2025-11-25","dateLabel":"25 Listopada 2025","size":"M","leadTime":89},{"date":"2025-12-10","dateLabel":"10 Grudnia 2025","size":"S","leadTime":44}];
+// ═══════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════
+const INITIAL_DATA=[{"date":"2024-07-15","dateLabel":"15 Lipca 2024","size":"S","leadTime":49},{"date":"2024-08-22","dateLabel":"22 Sierpnia 2024","size":"S","leadTime":48},{"date":"2024-09-10","dateLabel":"10 Września 2024","size":"S","leadTime":87},{"date":"2024-09-25","dateLabel":"25 Września 2024","size":"M","leadTime":57},{"date":"2024-10-05","dateLabel":"5 Października 2024","size":"M","leadTime":148},{"date":"2024-10-14","dateLabel":"14 Października 2024","size":"S","leadTime":53},{"date":"2024-10-28","dateLabel":"28 Października 2024","size":"S","leadTime":45},{"date":"2024-11-18","dateLabel":"18 Listopada 2024","size":"M","leadTime":145},{"date":"2024-12-04","dateLabel":"4 Grudnia 2024","size":"L","leadTime":105},{"date":"2025-01-08","dateLabel":"8 Stycznia 2025","size":"S","leadTime":5},{"date":"2025-01-20","dateLabel":"20 Stycznia 2025","size":"L","leadTime":163},{"date":"2025-02-14","dateLabel":"14 Lutego 2025","size":"S","leadTime":43},{"date":"2025-02-26","dateLabel":"26 Lutego 2025","size":"M","leadTime":415},{"date":"2025-03-15","dateLabel":"15 Marca 2025","size":"L","leadTime":123},{"date":"2025-04-10","dateLabel":"10 Kwietnia 2025","size":"M","leadTime":103},{"date":"2025-05-05","dateLabel":"5 Maja 2025","size":"L","leadTime":104},{"date":"2025-06-12","dateLabel":"12 Czerwca 2025","size":"L","leadTime":302},{"date":"2025-06-25","dateLabel":"25 Czerwca 2025","size":"L","leadTime":158},{"date":"2025-07-02","dateLabel":"2 Lipca 2025","size":"L","leadTime":98},{"date":"2025-07-11","dateLabel":"11 Lipca 2025","size":"S","leadTime":52},{"date":"2025-07-18","dateLabel":"18 Lipca 2025","size":"M","leadTime":95},{"date":"2025-07-29","dateLabel":"29 Lipca 2025","size":"S","leadTime":70},{"date":"2025-08-03","dateLabel":"3 Sierpnia 2025","size":"M","leadTime":95},{"date":"2025-08-14","dateLabel":"14 Sierpnia 2025","size":"M","leadTime":101},{"date":"2025-08-21","dateLabel":"21 Sierpnia 2025","size":"M","leadTime":57},{"date":"2025-08-29","dateLabel":"29 Sierpnia 2025","size":"M","leadTime":57},{"date":"2025-09-08","dateLabel":"8 Września 2025","size":"S","leadTime":53},{"date":"2025-09-22","dateLabel":"22 Września 2025","size":"L","leadTime":137},{"date":"2025-10-04","dateLabel":"4 Października 2025","size":"S","leadTime":73},{"date":"2025-10-12","dateLabel":"12 Października 2025","size":"M","leadTime":60},{"date":"2025-10-19","dateLabel":"19 Października 2025","size":"S","leadTime":126},{"date":"2025-10-27","dateLabel":"27 Października 2025","size":"M","leadTime":57},{"date":"2025-11-05","dateLabel":"5 Listopada 2025","size":"L","leadTime":124},{"date":"2025-11-15","dateLabel":"15 Listopada 2025","size":"M","leadTime":75},{"date":"2025-11-25","dateLabel":"25 Listopada 2025","size":"M","leadTime":89},{"date":"2025-12-10","dateLabel":"10 Grudnia 2025","size":"S","leadTime":44}];
 
-const COLORS = {
-  S: { fill: '#22d3ee', glow: 'rgba(34,211,238,.3)' },
-  M: { fill: '#f59e0b', glow: 'rgba(245,158,11,.3)' },
-  L: { fill: '#f43f5e', glow: 'rgba(244,63,94,.3)' },
-};
-const PCOLORS = { 50: '#4ade80', 85: '#facc15', 95: '#ef4444' };
+let idCounter = 0;
+function makeId(){ return '_' + (++idCounter); }
 
-// State
+let DATA = INITIAL_DATA.map(d => ({...d, _id: makeId()}));
+let removedPoints = [];
+
+const COLORS={S:{fill:'#22d3ee',glow:'rgba(34,211,238,.3)'},M:{fill:'#f59e0b',glow:'rgba(245,158,11,.3)'},L:{fill:'#f43f5e',glow:'rgba(244,63,94,.3)'}};
+const PCOLORS={50:'#4ade80',85:'#facc15',95:'#ef4444'};
+const mNamesPL=['Stycznia','Lutego','Marca','Kwietnia','Maja','Czerwca','Lipca','Sierpnia','Września','Października','Listopada','Grudnia'];
+const mNamesShort=['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
 let activeSizes = new Set(['S','M','L']);
 let activePercentiles = new Set();
 let hoveredIdx = -1;
+let rangeFrom = null, rangeTo = null;
 
-// Compute percentile (interpolated)
-function percentile(arr, p) {
-  const s = [...arr].sort((a,b) => a - b);
-  const i = (p / 100) * (s.length - 1);
-  const lo = Math.floor(i), hi = Math.ceil(i);
-  return lo === hi ? s[lo] : s[lo] + (s[hi] - s[lo]) * (i - lo);
+// ═══════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════
+function percentile(arr,p){
+  const s=[...arr].sort((a,b)=>a-b);
+  if(!s.length) return 0;
+  if(s.length===1) return s[0];
+  const i=(p/100)*(s.length-1),lo=Math.floor(i),hi=Math.ceil(i);
+  return lo===hi?s[lo]:s[lo]+(s[hi]-s[lo])*(i-lo);
+}
+function dateToTs(s){return new Date(s).getTime()}
+function formatDateLabel(dateStr){
+  const d=new Date(dateStr);
+  return `${d.getDate()} ${mNamesPL[d.getMonth()]} ${d.getFullYear()}`;
+}
+function parseMonthInput(val){
+  if(!val||!val.trim()) return null;
+  const m=val.trim().match(/^(\d{1,2})\s*[\/\-\.]\s*(\d{4})$/);
+  if(!m) return 'invalid';
+  const month=parseInt(m[1]),year=parseInt(m[2]);
+  if(month<1||month>12) return 'invalid';
+  return {month,year};
+}
+function monthStart(m,y){return new Date(y,m-1,1).getTime()}
+function monthEnd(m,y){return new Date(y,m,0,23,59,59,999).getTime()}
+
+function showToast(msg,type){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast '+(type||'success');
+  t.classList.add('visible');
+  clearTimeout(t._timer);
+  t._timer=setTimeout(()=>t.classList.remove('visible'),2800);
 }
 
-function getFiltered() {
-  return DATA.filter(d => activeSizes.has(d.size));
+// ═══════════════════════════════════════════
+// FILTERING
+// ═══════════════════════════════════════════
+function getVisible(){
+  let items=DATA.filter(d=>activeSizes.has(d.size));
+  if(rangeFrom&&rangeFrom!=='invalid') items=items.filter(d=>dateToTs(d.date)>=monthStart(rangeFrom.month,rangeFrom.year));
+  if(rangeTo&&rangeTo!=='invalid') items=items.filter(d=>dateToTs(d.date)<=monthEnd(rangeTo.month,rangeTo.year));
+  return items;
+}
+function computePercentiles(data){
+  const v=data.map(d=>d.leadTime);
+  if(!v.length) return {50:0,85:0,95:0};
+  return {50:percentile(v,50),85:percentile(v,85),95:percentile(v,95)};
 }
 
-function computePercentiles(data) {
-  const vals = data.map(d => d.leadTime);
-  if (vals.length === 0) return { 50: 0, 85: 0, 95: 0 };
-  return { 50: percentile(vals, 50), 85: percentile(vals, 85), 95: percentile(vals, 95) };
+// ═══════════════════════════════════════════
+// CANVAS
+// ═══════════════════════════════════════════
+const canvas=document.getElementById('chart'),ctx=canvas.getContext('2d');
+let W,H;
+const PAD={top:30,right:30,bottom:50,left:60};
+
+function resize(){
+  const rect=canvas.parentElement.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  W=rect.width;H=rect.height;
+  canvas.width=W*dpr;canvas.height=H*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 
-// Canvas setup
-const canvas = document.getElementById('chart');
-const ctx = canvas.getContext('2d');
-let W, H;
-const PAD = { top: 30, right: 30, bottom: 50, left: 60 };
+function draw(){
+  const data=getVisible(),pctls=computePercentiles(data);
+  const su='<span class="stat-unit">dni</span>';
 
-function resize() {
-  const rect = canvas.parentElement.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  W = rect.width; H = rect.height;
-  canvas.width = W * dpr; canvas.height = H * dpr;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
+  document.getElementById('st-total').textContent=data.length;
+  document.getElementById('st-removed').textContent=removedPoints.length;
+  document.getElementById('st-p50').innerHTML=data.length?`${Math.round(pctls[50])} ${su}`:'—';
+  document.getElementById('st-p85').innerHTML=data.length?`${Math.round(pctls[85])} ${su}`:'—';
+  document.getElementById('st-p95').innerHTML=data.length?`${Math.round(pctls[95])} ${su}`:'—';
 
-function dateToTs(s) { return new Date(s).getTime(); }
-
-function draw() {
-  const data = getFiltered();
-  const pctls = computePercentiles(data);
-
-  // Update stat cards
-  document.getElementById('st-total').textContent = data.length;
-  document.getElementById('st-p50').innerHTML = `${Math.round(pctls[50])} <span class="stat-unit">dni</span>`;
-  document.getElementById('st-p85').innerHTML = `${Math.round(pctls[85])} <span class="stat-unit">dni</span>`;
-  document.getElementById('st-p95').innerHTML = `${Math.round(pctls[95])} <span class="stat-unit">dni</span>`;
-
-  ctx.clearRect(0, 0, W, H);
-
-  // Determine ranges from ALL data (stable axes)
-  const allTs = DATA.map(d => dateToTs(d.date));
-  const allLt = DATA.map(d => d.leadTime);
-  const xMin = Math.min(...allTs), xMax = Math.max(...allTs);
-  const yMax = Math.max(...allLt) * 1.08;
-
-  const plotW = W - PAD.left - PAD.right;
-  const plotH = H - PAD.top - PAD.bottom;
-  const xScale = v => PAD.left + ((v - xMin) / (xMax - xMin)) * plotW;
-  const yScale = v => PAD.top + plotH - (v / yMax) * plotH;
-
-  // Grid lines
-  ctx.strokeStyle = 'rgba(255,255,255,.04)';
-  ctx.lineWidth = 1;
-  const yTicks = [0, 50, 100, 150, 200, 250, 300, 350, 400, 450];
-  for (const v of yTicks) {
-    if (v > yMax) continue;
-    const y = Math.round(yScale(v)) + .5;
-    ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(W - PAD.right, y); ctx.stroke();
-    ctx.fillStyle = '#4a4a5e';
-    ctx.font = '11px "JetBrains Mono", monospace';
-    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-    ctx.fillText(v, PAD.left - 10, y);
+  ctx.clearRect(0,0,W,H);
+  if(!data.length){
+    ctx.fillStyle='#4a4a5e';ctx.font='13px "JetBrains Mono",monospace';ctx.textAlign='center';
+    ctx.fillText('Brak danych do wyświetlenia',W/2,H/2);
+    window._dots=[];return;
   }
 
-  // X axis labels (months)
-  const months = [];
-  let d0 = new Date(xMin); d0.setDate(1);
-  while (d0.getTime() <= xMax + 30*86400000) {
-    months.push(new Date(d0));
-    d0.setMonth(d0.getMonth() + 2);
-  }
-  ctx.fillStyle = '#4a4a5e';
-  ctx.font = '11px "JetBrains Mono", monospace';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  const mNames = ['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
-  for (const m of months) {
-    const x = xScale(m.getTime());
-    if (x < PAD.left || x > W - PAD.right) continue;
-    ctx.fillText(`${mNames[m.getMonth()]} ${m.getFullYear().toString().slice(2)}`, x, H - PAD.bottom + 12);
-    ctx.strokeStyle = 'rgba(255,255,255,.03)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, H - PAD.bottom); ctx.stroke();
+  const allTs=data.map(d=>dateToTs(d.date)),allLt=data.map(d=>d.leadTime);
+  let xMin=Math.min(...allTs),xMax=Math.max(...allTs);
+  const xPad=(xMax-xMin)*0.04||86400000*15;
+  xMin-=xPad;xMax+=xPad;
+  const yMax=Math.max(...allLt)*1.12;
+  const plotW=W-PAD.left-PAD.right,plotH=H-PAD.top-PAD.bottom;
+  const xScale=v=>PAD.left+((v-xMin)/(xMax-xMin))*plotW;
+  const yScale=v=>PAD.top+plotH-(v/yMax)*plotH;
+
+  // Y grid
+  ctx.strokeStyle='rgba(255,255,255,.04)';ctx.lineWidth=1;
+  const yStep=yMax>300?100:yMax>150?50:25;
+  for(let v=0;v<=yMax;v+=yStep){
+    const y=Math.round(yScale(v))+.5;
+    ctx.beginPath();ctx.moveTo(PAD.left,y);ctx.lineTo(W-PAD.right,y);ctx.stroke();
+    ctx.fillStyle='#4a4a5e';ctx.font='11px "JetBrains Mono",monospace';ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(Math.round(v),PAD.left-10,y);
   }
 
-  // Y axis label
-  ctx.save();
-  ctx.fillStyle = '#5a5a72';
-  ctx.font = '600 11px "JetBrains Mono", monospace';
-  ctx.translate(16, PAD.top + plotH / 2);
-  ctx.rotate(-Math.PI/2);
-  ctx.textAlign = 'center';
-  ctx.fillText('CZAS REALIZACJI (dni)', 0, 0);
-  ctx.restore();
+  // X months
+  const dStart=new Date(xMin);dStart.setDate(1);
+  const ma=[];let cur=new Date(dStart);
+  while(cur.getTime()<=xMax+30*86400000){ma.push(new Date(cur));cur.setMonth(cur.getMonth()+1)}
+  const step=ma.length>14?2:1;
+  ctx.fillStyle='#4a4a5e';ctx.font='11px "JetBrains Mono",monospace';ctx.textAlign='center';ctx.textBaseline='top';
+  for(let i=0;i<ma.length;i+=step){
+    const m=ma[i],x=xScale(m.getTime());
+    if(x<PAD.left-5||x>W-PAD.right+5) continue;
+    ctx.fillText(`${mNamesShort[m.getMonth()]} ${m.getFullYear().toString().slice(2)}`,x,H-PAD.bottom+12);
+    ctx.strokeStyle='rgba(255,255,255,.03)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(x,PAD.top);ctx.lineTo(x,H-PAD.bottom);ctx.stroke();
+  }
+
+  // Y label
+  ctx.save();ctx.fillStyle='#5a5a72';ctx.font='600 11px "JetBrains Mono",monospace';
+  ctx.translate(16,PAD.top+plotH/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';
+  ctx.fillText('CZAS REALIZACJI (dni)',0,0);ctx.restore();
 
   // Percentile lines
-  for (const p of [50, 85, 95]) {
-    if (!activePercentiles.has(p)) continue;
-    const y = yScale(pctls[p]);
-    ctx.strokeStyle = PCOLORS[p];
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([6, 4]);
-    ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(W - PAD.right, y); ctx.stroke();
+  for(const p of [50,85,95]){
+    if(!activePercentiles.has(p)) continue;
+    const y=yScale(pctls[p]);
+    if(y<PAD.top-5||y>H-PAD.bottom+5) continue;
+    ctx.strokeStyle=PCOLORS[p];ctx.lineWidth=1.5;ctx.setLineDash([6,4]);
+    ctx.beginPath();ctx.moveTo(PAD.left,y);ctx.lineTo(W-PAD.right,y);ctx.stroke();
     ctx.setLineDash([]);
-    // Label
-    ctx.fillStyle = PCOLORS[p];
-    ctx.font = '600 10px "JetBrains Mono", monospace';
-    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
-    ctx.fillText(`P${p}: ${Math.round(pctls[p])} dni`, W - PAD.right - 4, y - 4);
+    ctx.fillStyle=PCOLORS[p];ctx.font='600 10px "JetBrains Mono",monospace';ctx.textAlign='right';ctx.textBaseline='bottom';
+    ctx.fillText(`P${p}: ${Math.round(pctls[p])} dni`,W-PAD.right-4,y-4);
   }
 
-  // Draw dots
-  const dotPositions = [];
-  data.forEach((d, i) => {
-    const x = xScale(dateToTs(d.date));
-    const y = yScale(d.leadTime);
-    const c = COLORS[d.size];
-    const r = hoveredIdx === i ? 8 : 6;
-
-    // Glow
-    const grad = ctx.createRadialGradient(x, y, 0, x, y, r * 2.5);
-    grad.addColorStop(0, c.glow);
-    grad.addColorStop(1, 'transparent');
-    ctx.fillStyle = grad;
-    ctx.beginPath(); ctx.arc(x, y, r * 2.5, 0, Math.PI*2); ctx.fill();
-
-    // Dot
-    ctx.fillStyle = c.fill;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
-
-    // Outline on hover
-    if (hoveredIdx === i) {
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(x, y, r + 2, 0, Math.PI*2); ctx.stroke();
-    }
-
-    dotPositions.push({ x, y, r: 12, idx: i, data: d });
+  // Dots
+  const dots=[];
+  data.forEach((d,i)=>{
+    const x=xScale(dateToTs(d.date)),y=yScale(d.leadTime),c=COLORS[d.size];
+    const r=hoveredIdx===i?8:6;
+    const grad=ctx.createRadialGradient(x,y,0,x,y,r*2.5);
+    grad.addColorStop(0,c.glow);grad.addColorStop(1,'transparent');
+    ctx.fillStyle=grad;ctx.beginPath();ctx.arc(x,y,r*2.5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=c.fill;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+    if(hoveredIdx===i){ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,r+2,0,Math.PI*2);ctx.stroke()}
+    dots.push({x,y,r:14,idx:i,data:d});
   });
-
-  window._dots = dotPositions;
+  window._dots=dots;
 }
 
-// Tooltip
-const tooltip = document.getElementById('tooltip');
-const ttDate = document.getElementById('tt-date');
-const ttLead = document.getElementById('tt-lead');
-const ttSize = document.getElementById('tt-size');
+// ═══════════════════════════════════════════
+// TOOLTIP & CLICK
+// ═══════════════════════════════════════════
+const tooltip=document.getElementById('tooltip');
 
-canvas.addEventListener('mousemove', e => {
-  const rect = canvas.getBoundingClientRect();
-  const mx = e.clientX - rect.left;
-  const my = e.clientY - rect.top;
-  let found = -1;
-  for (const dot of (window._dots || [])) {
-    const dx = mx - dot.x, dy = my - dot.y;
-    if (dx*dx + dy*dy < dot.r * dot.r) { found = dot.idx; break; }
+function findDot(e){
+  const rect=canvas.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  for(const dot of (window._dots||[])){
+    if((mx-dot.x)**2+(my-dot.y)**2<dot.r**2) return dot;
   }
-  if (found !== hoveredIdx) {
-    hoveredIdx = found;
-    draw();
-  }
-  if (found >= 0) {
-    const d = getFiltered()[found];
-    ttDate.textContent = d.dateLabel;
-    ttLead.textContent = d.leadTime + ' dni';
-    ttSize.textContent = 'Rozmiar ' + d.size;
-    ttSize.className = 'tt-size ' + d.size;
+  return null;
+}
+
+canvas.addEventListener('mousemove',e=>{
+  const dot=findDot(e);
+  const ni=dot?dot.idx:-1;
+  if(ni!==hoveredIdx){hoveredIdx=ni;draw()}
+  if(dot){
+    const d=dot.data;
+    document.getElementById('tt-date').textContent=d.dateLabel;
+    document.getElementById('tt-lead').textContent=d.leadTime+' dni';
+    const ts=document.getElementById('tt-size');
+    ts.textContent='Rozmiar '+d.size;ts.className='tt-size '+d.size;
     tooltip.classList.add('visible');
-    let tx = e.clientX + 14, ty = e.clientY - 10;
-    if (tx + 180 > window.innerWidth) tx = e.clientX - 180;
-    tooltip.style.left = tx + 'px';
-    tooltip.style.top = ty + 'px';
-  } else {
-    tooltip.classList.remove('visible');
+    let tx=e.clientX+14,ty=e.clientY-10;
+    if(tx+190>window.innerWidth) tx=e.clientX-190;
+    if(ty<10) ty=10;
+    tooltip.style.left=tx+'px';tooltip.style.top=ty+'px';
+  } else tooltip.classList.remove('visible');
+});
+canvas.addEventListener('mouseleave',()=>{hoveredIdx=-1;draw();tooltip.classList.remove('visible')});
+
+canvas.addEventListener('click',e=>{
+  const dot=findDot(e);
+  if(!dot) return;
+  removePoint(dot.data._id);
+});
+
+// ═══════════════════════════════════════════
+// REMOVE / RESTORE
+// ═══════════════════════════════════════════
+function removePoint(id){
+  const idx=DATA.findIndex(d=>d._id===id);
+  if(idx<0) return;
+  const [item]=DATA.splice(idx,1);
+  removedPoints.push(item);
+  hoveredIdx=-1;tooltip.classList.remove('visible');
+  renderRemovedList();draw();
+  showToast(`Usunięto: ${item.dateLabel} · ${item.size} · ${item.leadTime} dni`);
+}
+function restorePoint(id){
+  const idx=removedPoints.findIndex(d=>d._id===id);
+  if(idx<0) return;
+  const [item]=removedPoints.splice(idx,1);
+  DATA.push(item);DATA.sort((a,b)=>dateToTs(a.date)-dateToTs(b.date));
+  renderRemovedList();draw();
+  showToast(`Przywrócono: ${item.dateLabel}`);
+}
+function restoreAll(){
+  if(!removedPoints.length) return;
+  DATA.push(...removedPoints);removedPoints=[];
+  DATA.sort((a,b)=>dateToTs(a.date)-dateToTs(b.date));
+  renderRemovedList();draw();
+  showToast('Przywrócono wszystkie punkty');
+}
+function renderRemovedList(){
+  const sec=document.getElementById('removed-section'),list=document.getElementById('removed-list');
+  document.getElementById('removed-count').textContent=removedPoints.length;
+  if(!removedPoints.length){sec.style.display='none';return}
+  sec.style.display='block';
+  list.innerHTML=removedPoints.map(d=>`<div class="removed-chip" data-id="${d._id}"><span class="ri">↩</span>${d.dateLabel} · ${d.size} · ${d.leadTime}d</div>`).join('');
+  list.querySelectorAll('.removed-chip').forEach(c=>c.addEventListener('click',()=>restorePoint(c.dataset.id)));
+}
+document.getElementById('restore-all').addEventListener('click',restoreAll);
+
+// ═══════════════════════════════════════════
+// DATE RANGE
+// ═══════════════════════════════════════════
+function handleRange(){
+  const fromEl=document.getElementById('range-from'),toEl=document.getElementById('range-to');
+  const rf=parseMonthInput(fromEl.value),rt=parseMonthInput(toEl.value);
+  fromEl.classList.toggle('invalid',rf==='invalid');
+  toEl.classList.toggle('invalid',rt==='invalid');
+  rangeFrom=(rf&&rf!=='invalid')?rf:null;
+  rangeTo=(rt&&rt!=='invalid')?rt:null;
+  hoveredIdx=-1;draw();
+}
+document.getElementById('range-from').addEventListener('input',handleRange);
+document.getElementById('range-to').addEventListener('input',handleRange);
+
+// ═══════════════════════════════════════════
+// SIZE & PERCENTILE TOGGLES
+// ═══════════════════════════════════════════
+document.querySelectorAll('.toggle-btn').forEach(btn=>btn.addEventListener('click',()=>{
+  const s=btn.dataset.size;btn.classList.toggle('active');
+  activeSizes.has(s)?activeSizes.delete(s):activeSizes.add(s);hoveredIdx=-1;draw();
+}));
+document.querySelectorAll('.pctl-btn').forEach(btn=>btn.addEventListener('click',()=>{
+  const p=parseInt(btn.dataset.p);btn.classList.toggle('active');
+  activePercentiles.has(p)?activePercentiles.delete(p):activePercentiles.add(p);draw();
+}));
+
+// ═══════════════════════════════════════════
+// ADD SINGLE POINT
+// ═══════════════════════════════════════════
+document.getElementById('add-btn').addEventListener('click',()=>{
+  const dateVal=document.getElementById('add-date').value;
+  const size=document.getElementById('add-size').value;
+  const lead=parseInt(document.getElementById('add-lead').value);
+  if(!dateVal||!lead||lead<1){showToast('Uzupełnij wszystkie pola','error');return}
+  const item={date:dateVal,dateLabel:formatDateLabel(dateVal),size,leadTime:lead,_id:makeId()};
+  DATA.push(item);DATA.sort((a,b)=>dateToTs(a.date)-dateToTs(b.date));
+  document.getElementById('add-date').value='';document.getElementById('add-lead').value='';
+  draw();showToast(`Dodano: ${item.dateLabel} · ${size} · ${lead} dni`);
+});
+
+// ═══════════════════════════════════════════
+// FILE IMPORT (SheetJS)
+// ═══════════════════════════════════════════
+document.getElementById('file-import').addEventListener('change',async e=>{
+  const file=e.target.files[0];
+  if(!file) return;
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array',cellDates:true});
+    const sheet=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(sheet,{defval:''});
+    let added=0;
+    const mPL={'Stycznia':'01','Lutego':'02','Marca':'03','Kwietnia':'04','Maja':'05','Czerwca':'06','Lipca':'07','Sierpnia':'08','Września':'09','Października':'10','Listopada':'11','Grudnia':'12'};
+
+    for(const row of rows){
+      let dateVal=row['Data ukończenia']||row['Data']||row['Date']||row['data']||'';
+      let sizeVal=row['Deklarowany rozmiar']||row['Rozmiar']||row['Size']||row['size']||'';
+      let leadVal=row['Czas realizacji']||row['Lead Time']||row['leadTime']||row['czas']||'';
+
+      sizeVal=String(sizeVal).trim().toUpperCase();
+      if(!['S','M','L'].includes(sizeVal)) continue;
+      leadVal=parseInt(leadVal);
+      if(!leadVal||leadVal<1) continue;
+
+      let dateStr='';
+      if(dateVal instanceof Date && !isNaN(dateVal.getTime())){
+        dateStr=dateVal.toISOString().split('T')[0];
+      } else {
+        dateVal=String(dateVal).trim();
+        const plMatch=dateVal.match(/^(\d{1,2})\s+(\S+)\s+(\d{4})$/);
+        if(plMatch&&mPL[plMatch[2]]){
+          dateStr=`${plMatch[3]}-${mPL[plMatch[2]]}-${plMatch[1].padStart(2,'0')}`;
+        } else {
+          const parsed=new Date(dateVal);
+          if(!isNaN(parsed.getTime())) dateStr=parsed.toISOString().split('T')[0];
+        }
+      }
+      if(!dateStr) continue;
+
+      DATA.push({date:dateStr,dateLabel:formatDateLabel(dateStr),size:sizeVal,leadTime:leadVal,_id:makeId()});
+      added++;
+    }
+    DATA.sort((a,b)=>dateToTs(a.date)-dateToTs(b.date));
+    draw();
+    if(added) showToast(`Zaimportowano ${added} elementów z „${file.name}"`);
+    else showToast('Nie znaleziono pasujących danych w pliku','error');
+  } catch(err){
+    showToast('Błąd importu: '+err.message,'error');
   }
-});
-canvas.addEventListener('mouseleave', () => {
-  hoveredIdx = -1; draw();
-  tooltip.classList.remove('visible');
+  e.target.value='';
 });
 
-// Size toggles
-document.querySelectorAll('.toggle-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const s = btn.dataset.size;
-    btn.classList.toggle('active');
-    if (activeSizes.has(s)) activeSizes.delete(s); else activeSizes.add(s);
-    hoveredIdx = -1;
-    draw();
-  });
-});
-
-// Percentile toggles
-document.querySelectorAll('.pctl-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const p = parseInt(btn.dataset.p);
-    btn.classList.toggle('active');
-    if (activePercentiles.has(p)) activePercentiles.delete(p); else activePercentiles.add(p);
-    draw();
-  });
-});
-
-// Init
-window.addEventListener('resize', () => { resize(); draw(); });
-resize();
-draw();
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+window.addEventListener('resize',()=>{resize();draw()});
+resize();draw();
 </script>
 </body>
 </html>
