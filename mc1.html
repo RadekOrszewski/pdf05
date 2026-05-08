@@ -1,1 +1,415 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monte Carlo Forecast · Backlog Delivery</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f6f5f0;--surface:#fff;--surface2:#edece6;
+  --border:#d8d6cc;--border-light:#e8e6dd;
+  --text:#18181a;--text-dim:#5c5b55;--text-muted:#9a988f;
+  --accent:#1d4ed8;--accent-light:rgba(29,78,216,.08);
+  --p50:#059669;--p85:#d97706;--p95:#dc2626;
+  --blue:#2563eb;--green:#059669;--amber:#d97706;--red:#dc2626;
+  --purple:#7c3aed;
+  --font:'IBM Plex Mono',monospace;
+}
+html{font-size:14px}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh}
+.wrap{max-width:1100px;margin:0 auto;padding:2.5rem 2rem}
 
+.header{margin-bottom:2rem;border-bottom:2px solid var(--text);padding-bottom:1rem}
+.header h1{font-weight:700;font-size:1.45rem;letter-spacing:-.03em}
+.header .sub{color:var(--text-dim);font-size:.72rem;margin-top:.3rem}
+
+/* Panels */
+.panel{background:var(--surface);border:1px solid var(--border);padding:1.2rem 1.4rem;margin-bottom:1.2rem}
+.panel-title{font-size:.62rem;text-transform:uppercase;letter-spacing:.12em;color:var(--text-muted);margin-bottom:.8rem;font-weight:600}
+
+/* Input controls */
+.input-row{display:flex;gap:.8rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.6rem}
+.field{display:flex;flex-direction:column;gap:.2rem}
+.field label{font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)}
+.field input,.field select{font-family:var(--font);font-size:.82rem;padding:.4rem .55rem;background:var(--bg);border:1px solid var(--border);border-radius:0;color:var(--text);outline:none;transition:border-color .15s}
+.field input:focus{border-color:var(--accent)}
+.btn{font-family:var(--font);font-size:.65rem;padding:.42rem .75rem;border:1px solid;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:.06em;border-radius:0;font-weight:600}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:#1e40af}
+.btn-danger{background:transparent;border-color:var(--red);color:var(--red)}
+.btn-danger:hover{background:rgba(220,38,38,.06)}
+.btn-run{background:var(--green);border-color:var(--green);color:#fff;font-size:.72rem;padding:.55rem 1.2rem}
+.btn-run:hover{background:#047857}
+
+/* Throughput chips */
+.tp-list{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.5rem;min-height:28px;align-items:center}
+.tp-chip{display:inline-flex;align-items:center;gap:.3rem;padding:.25rem .5rem;background:var(--accent-light);border:1px solid rgba(29,78,216,.15);font-size:.72rem;font-weight:600;color:var(--accent);cursor:default;transition:all .15s}
+.tp-chip .x{cursor:pointer;color:var(--red);font-weight:700;font-size:.8rem;margin-left:.15rem;opacity:.5;transition:opacity .15s}
+.tp-chip .x:hover{opacity:1}
+.tp-add-row{display:flex;gap:.4rem;align-items:center;margin-top:.5rem}
+.tp-input{width:55px;font-family:var(--font);font-size:.78rem;padding:.3rem .4rem;background:var(--bg);border:1px solid var(--border);color:var(--text);outline:none}
+.tp-input:focus{border-color:var(--accent)}
+.tp-stats{font-size:.58rem;color:var(--text-muted);margin-top:.4rem}
+
+/* Results */
+.results{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;margin-bottom:1.2rem}
+.result-card{background:var(--surface);border:1px solid var(--border);padding:1.2rem 1.4rem;position:relative;overflow:hidden}
+.result-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.result-card.q1::before{background:var(--amber)}
+.result-card.q2::before{background:var(--purple)}
+.result-card .rq{font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:.6rem;font-weight:600}
+.result-card .rv{font-size:1.8rem;font-weight:700;line-height:1}
+.result-card .rv .unit{font-size:.7rem;font-weight:400;color:var(--text-dim)}
+.result-card .rd{font-size:.6rem;color:var(--text-dim);margin-top:.4rem;line-height:1.5}
+.prow{display:flex;gap:1.2rem;margin-top:.6rem}
+.pbox{flex:1}
+.pbox .plabel{font-size:.5rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:.15rem}
+.pbox .pval{font-size:1.3rem;font-weight:700}
+.pbox.p85 .pval{color:var(--amber)}
+.pbox.p95 .pval{color:var(--red)}
+
+/* Chart */
+.chart-panel{background:var(--surface);border:1px solid var(--border);padding:1.4rem 1.2rem 1rem}
+.chart-area{width:100%;height:380px;position:relative}
+canvas{display:block;width:100%!important;height:100%!important}
+.legend{display:flex;gap:1.2rem;margin-top:.6rem;padding-top:.6rem;border-top:1px solid var(--border-light);justify-content:center;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:.3rem;font-size:.6rem;color:var(--text-dim)}
+.legend-swatch{width:14px;height:3px}
+
+/* Sim status */
+.sim-status{font-size:.58rem;color:var(--text-muted);margin-top:.5rem;text-align:center}
+
+.tooltip{position:fixed;background:var(--surface);border:1px solid var(--border);padding:.55rem .75rem;pointer-events:none;opacity:0;transition:opacity .12s;z-index:100;box-shadow:0 4px 16px rgba(0,0,0,.07);font-size:.7rem;max-width:220px}
+.tooltip.visible{opacity:1}
+
+@media(max-width:700px){
+  .wrap{padding:1.5rem 1rem}.results{grid-template-columns:1fr}.chart-area{height:280px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>Monte Carlo Forecast</h1>
+    <div class="sub">Prognoza dostarczenia backlogu na podstawie historycznej przepustowości · 10 000 symulacji</div>
+  </div>
+
+  <!-- Inputs -->
+  <div class="panel">
+    <div class="panel-title">Parametry wejściowe</div>
+    <div class="input-row">
+      <div class="field">
+        <label>Elementy w backlogu</label>
+        <input type="number" id="backlog" value="62" min="1" style="width:80px">
+      </div>
+      <div class="field">
+        <label>Data startu</label>
+        <input type="date" id="start-date" value="2026-06-01">
+      </div>
+      <div class="field">
+        <label>Data docelowa (Q2)</label>
+        <input type="date" id="target-date" value="2026-08-31">
+      </div>
+      <div class="field">
+        <label>Długość Sprintu (dni)</label>
+        <input type="number" id="sprint-len" value="14" min="1" style="width:65px">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Historyczna przepustowość (items/Sprint)</div>
+    <div class="tp-list" id="tp-list"></div>
+    <div class="tp-add-row">
+      <input class="tp-input" id="tp-new" type="number" min="0" placeholder="np. 5">
+      <button class="btn btn-primary" id="tp-add-btn">+ Dodaj</button>
+    </div>
+    <div class="tp-stats" id="tp-stats"></div>
+  </div>
+
+  <div style="text-align:center;margin-bottom:1.5rem">
+    <button class="btn btn-run" id="run-btn">▶ Uruchom symulację (10 000×)</button>
+  </div>
+
+  <!-- Results -->
+  <div class="results">
+    <div class="result-card q1">
+      <div class="rq">Q1 · Kiedy skończymy <span id="r-backlog">62</span> elementów?</div>
+      <div class="prow">
+        <div class="pbox p85"><div class="plabel">85% pewności</div><div class="pval" id="r-date85">—</div></div>
+        <div class="pbox p95"><div class="plabel">95% pewności</div><div class="pval" id="r-date95">—</div></div>
+      </div>
+      <div class="rd" id="r-sprints">—</div>
+    </div>
+    <div class="result-card q2">
+      <div class="rq">Q2 · Ile dostarczymy do <span id="r-target">31.08.2026</span>?</div>
+      <div class="prow">
+        <div class="pbox p85"><div class="plabel">85% pewności</div><div class="pval" id="r-items85">—</div></div>
+        <div class="pbox p95"><div class="plabel">95% pewności</div><div class="pval" id="r-items95">—</div></div>
+      </div>
+      <div class="rd" id="r-items-detail">—</div>
+    </div>
+  </div>
+
+  <!-- Histogram -->
+  <div class="chart-panel">
+    <div class="chart-area"><canvas id="hist-chart"></canvas></div>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-swatch" style="background:var(--blue)"></span> Rozkład ukończenia</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:var(--amber)"></span> 85. percentyl</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:var(--red)"></span> 95. percentyl</div>
+    </div>
+    <div class="sim-status" id="sim-status">Kliknij „Uruchom symulację" aby wygenerować prognozę</div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// ═══════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════
+let throughput = [5,4,4,5,6,4,2,3,2,5,6];
+let simResults = null; // {endDates:[], sprintCounts:[], itemsByTarget:[]}
+
+const SIMS = 10000;
+
+// ═══════════════════════════════════════
+// THROUGHPUT UI
+// ═══════════════════════════════════════
+function renderTP(){
+  const el=document.getElementById('tp-list');
+  el.innerHTML=throughput.map((v,i)=>`<span class="tp-chip">S${i+1}: ${v}<span class="x" data-i="${i}">×</span></span>`).join('');
+  el.querySelectorAll('.x').forEach(x=>x.addEventListener('click',()=>{
+    throughput.splice(parseInt(x.dataset.i),1);
+    renderTP();
+  }));
+  // Stats
+  const s=document.getElementById('tp-stats');
+  if(throughput.length===0){s.textContent='Brak danych';return}
+  const sorted=[...throughput].sort((a,b)=>a-b);
+  const med=sorted.length%2?sorted[Math.floor(sorted.length/2)]:(sorted[sorted.length/2-1]+sorted[sorted.length/2])/2;
+  const avg=(throughput.reduce((a,b)=>a+b,0)/throughput.length).toFixed(1);
+  const mn=Math.min(...throughput), mx=Math.max(...throughput);
+  s.textContent=`${throughput.length} Sprintów · śr: ${avg} · mediana: ${med} · min: ${mn} · max: ${mx}`;
+}
+renderTP();
+
+document.getElementById('tp-add-btn').addEventListener('click',()=>{
+  const v=parseInt(document.getElementById('tp-new').value);
+  if(isNaN(v)||v<0) return;
+  throughput.push(v);
+  document.getElementById('tp-new').value='';
+  renderTP();
+});
+document.getElementById('tp-new').addEventListener('keydown',e=>{
+  if(e.key==='Enter') document.getElementById('tp-add-btn').click();
+});
+
+// ═══════════════════════════════════════
+// SIMULATION
+// ═══════════════════════════════════════
+function runSimulation(){
+  if(throughput.length<2){alert('Potrzebujesz co najmniej 2 wartości przepustowości');return}
+
+  const backlog=parseInt(document.getElementById('backlog').value)||62;
+  const startDate=new Date(document.getElementById('start-date').value);
+  const targetDate=new Date(document.getElementById('target-date').value);
+  const sprintLen=parseInt(document.getElementById('sprint-len').value)||14;
+
+  document.getElementById('r-backlog').textContent=backlog;
+  const tgtLabel=`${targetDate.getDate().toString().padStart(2,'0')}.${(targetDate.getMonth()+1).toString().padStart(2,'0')}.${targetDate.getFullYear()}`;
+  document.getElementById('r-target').textContent=tgtLabel;
+
+  // How many sprints fit before target?
+  const msToTarget=targetDate.getTime()-startDate.getTime();
+  const sprintsToTarget=Math.floor(msToTarget/(sprintLen*86400000));
+
+  const endDates=[];
+  const sprintCounts=[];
+  const itemsByTarget=[];
+
+  for(let s=0;s<SIMS;s++){
+    let remaining=backlog;
+    let sprints=0;
+    let delivered=0;
+
+    // Q1: how many sprints to finish backlog?
+    let rem1=backlog;
+    let sp1=0;
+    while(rem1>0&&sp1<200){
+      const tp=throughput[Math.floor(Math.random()*throughput.length)];
+      rem1-=tp;
+      sp1++;
+    }
+    sprintCounts.push(sp1);
+    const endMs=startDate.getTime()+sp1*sprintLen*86400000;
+    endDates.push(endMs);
+
+    // Q2: how many items by target?
+    let del2=0;
+    for(let sp=0;sp<sprintsToTarget;sp++){
+      del2+=throughput[Math.floor(Math.random()*throughput.length)];
+    }
+    itemsByTarget.push(Math.min(del2,backlog));
+  }
+
+  // Sort for percentiles
+  endDates.sort((a,b)=>a-b);
+  sprintCounts.sort((a,b)=>a-b);
+  itemsByTarget.sort((a,b)=>a-b);
+
+  simResults={endDates,sprintCounts,itemsByTarget,startDate,sprintLen,backlog,targetDate,sprintsToTarget};
+  displayResults();
+}
+
+function pct(arr,p){
+  const i=Math.floor(p/100*arr.length);
+  return arr[Math.min(i,arr.length-1)];
+}
+
+function fmtDate(ms){
+  const d=new Date(ms);
+  const months=['sty','lut','mar','kwi','maj','cze','lip','sie','wrz','paź','lis','gru'];
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function displayResults(){
+  if(!simResults) return;
+  const{endDates,sprintCounts,itemsByTarget,startDate,sprintLen,backlog,sprintsToTarget}=simResults;
+
+  // Q1
+  const d85=pct(endDates,85), d95=pct(endDates,95);
+  const sp85=pct(sprintCounts,85), sp95=pct(sprintCounts,95);
+  document.getElementById('r-date85').textContent=fmtDate(d85);
+  document.getElementById('r-date95').textContent=fmtDate(d95);
+  document.getElementById('r-sprints').textContent=`85%: ${sp85} Sprintów (${sp85*sprintLen} dni) · 95%: ${sp95} Sprintów (${sp95*sprintLen} dni)`;
+
+  // Q2
+  const it85=pct(itemsByTarget,15); // 85% chance = 15th percentile (conservative)
+  const it95=pct(itemsByTarget,5);  // 95% chance = 5th percentile
+  document.getElementById('r-items85').textContent=`${it85} / ${backlog}`;
+  document.getElementById('r-items95').textContent=`${it95} / ${backlog}`;
+  const pctDone85=Math.round(it85/backlog*100);
+  const pctDone95=Math.round(it95/backlog*100);
+  document.getElementById('r-items-detail').textContent=`Do mety: ${sprintsToTarget} Sprintów · 85%: ${pctDone85}% backlogu · 95%: ${pctDone95}% backlogu`;
+
+  document.getElementById('sim-status').textContent=`${SIMS.toLocaleString()} symulacji ukończonych · ${throughput.length} próbek przepustowości`;
+
+  drawHistogram();
+}
+
+// ═══════════════════════════════════════
+// HISTOGRAM
+// ═══════════════════════════════════════
+const canvas=document.getElementById('hist-chart');
+const ctx=canvas.getContext('2d');
+const PAD={top:25,right:30,bottom:55,left:50};
+
+function drawHistogram(){
+  if(!simResults) return;
+  const{endDates}=simResults;
+
+  const rect=canvas.parentElement.getBoundingClientRect();
+  const dpr=window.devicePixelRatio||1;
+  const W=rect.width,H=rect.height;
+  canvas.width=W*dpr;canvas.height=H*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+
+  // Build date histogram (weekly bins)
+  const minD=endDates[0], maxD=endDates[endDates.length-1];
+  const binSize=7*86400000; // 1 week
+  const numBins=Math.ceil((maxD-minD)/binSize)+1;
+  const bins=new Array(numBins).fill(0);
+  for(const d of endDates){
+    const bi=Math.floor((d-minD)/binSize);
+    bins[Math.min(bi,numBins-1)]++;
+  }
+
+  const maxBin=Math.max(...bins);
+  const plotW=W-PAD.left-PAD.right, plotH=H-PAD.top-PAD.bottom;
+  const barW=Math.max(2,plotW/numBins-1);
+  const xS=i=>PAD.left+i*(plotW/numBins);
+  const yS=v=>PAD.top+plotH-(v/maxBin)*plotH;
+
+  // Y grid
+  const yStep=maxBin>2000?500:maxBin>1000?200:maxBin>500?100:50;
+  for(let v=0;v<=maxBin;v+=yStep){
+    const y=Math.round(yS(v))+.5;
+    ctx.strokeStyle='#e2e0d8';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(PAD.left,y);ctx.lineTo(W-PAD.right,y);ctx.stroke();
+    ctx.fillStyle='#9a988f';ctx.font='9px "IBM Plex Mono",monospace';ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(v,PAD.left-6,y);
+  }
+
+  // Percentile positions
+  const d50=pct(endDates,50), d85=pct(endDates,85), d95=pct(endDates,95);
+
+  // Bars
+  for(let i=0;i<numBins;i++){
+    if(bins[i]===0) continue;
+    const x=xS(i), y=yS(bins[i]), h=plotH-(y-PAD.top);
+    const binDate=minD+i*binSize;
+    let color='#2563eb';
+    if(binDate>=d95) color='#dc2626';
+    else if(binDate>=d85) color='#d97706';
+    ctx.fillStyle=color;
+    ctx.globalAlpha=.75;
+    ctx.fillRect(x+.5,y,barW,h);
+    ctx.globalAlpha=1;
+  }
+
+  // Percentile lines
+  function drawPctLine(val,color,label){
+    const bi=(val-minD)/binSize;
+    const x=xS(bi);
+    if(x<PAD.left||x>W-PAD.right) return;
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.setLineDash([6,4]);
+    ctx.beginPath();ctx.moveTo(x,PAD.top);ctx.lineTo(x,H-PAD.bottom);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=color;ctx.font='600 9px "IBM Plex Mono",monospace';ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText(label,x,PAD.top-4);
+    ctx.font='8px "IBM Plex Mono",monospace';
+    ctx.fillText(fmtDate(val),x,PAD.top-14);
+  }
+  drawPctLine(d50,'#059669','P50');
+  drawPctLine(d85,'#d97706','P85');
+  drawPctLine(d95,'#dc2626','P95');
+
+  // X axis labels (monthly)
+  ctx.fillStyle='#9a988f';ctx.font='9px "IBM Plex Mono",monospace';ctx.textAlign='center';ctx.textBaseline='top';
+  const months=['sty','lut','mar','kwi','maj','cze','lip','sie','wrz','paź','lis','gru'];
+  const seenMonths=new Set();
+  for(let i=0;i<numBins;i+=Math.max(1,Math.floor(numBins/12))){
+    const d=new Date(minD+i*binSize);
+    const key=`${d.getFullYear()}-${d.getMonth()}`;
+    if(seenMonths.has(key)) continue;
+    seenMonths.add(key);
+    const x=xS(i);
+    ctx.fillText(`${months[d.getMonth()]} ${d.getFullYear().toString().slice(2)}`,x,H-PAD.bottom+8);
+  }
+
+  // Y label
+  ctx.save();ctx.fillStyle='#9a988f';ctx.font='600 9px "IBM Plex Mono",monospace';
+  ctx.translate(12,PAD.top+plotH/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';
+  ctx.fillText('LICZBA SYMULACJI',0,0);ctx.restore();
+
+  // X label
+  ctx.fillStyle='#9a988f';ctx.font='600 9px "IBM Plex Mono",monospace';ctx.textAlign='center';
+  ctx.fillText('PROGNOZOWANA DATA UKOŃCZENIA',PAD.left+plotW/2,H-6);
+}
+
+// ═══════════════════════════════════════
+// EVENTS
+// ═══════════════════════════════════════
+document.getElementById('run-btn').addEventListener('click',runSimulation);
+window.addEventListener('resize',()=>{if(simResults) drawHistogram()});
+
+// Auto-run on load
+runSimulation();
+</script>
+</body>
+</html>
