@@ -1,1 +1,497 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monte Carlo · Epic Delivery Forecast</title>
+<link href="https://fonts.googleapis.com/css2?family=Anybody:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f2f1eb;--surface:#fff;--surface2:#eae9e2;
+  --border:#d2d0c6;--border-lt:#e4e2da;
+  --text:#16160f;--dim:#5e5d54;--muted:#9e9c91;
+  --accent:#1a56db;--accent-lt:rgba(26,86,219,.07);
+  --green:#059669;--amber:#d97706;--red:#dc2626;--purple:#7c3aed;--teal:#0d9488;
+  --mono:'IBM Plex Mono',monospace;
+  --display:'Anybody',sans-serif;
+}
+html{font-size:13.5px}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh}
+.wrap{max-width:1160px;margin:0 auto;padding:2.5rem 2rem 4rem}
 
+.hdr{margin-bottom:2.2rem;display:flex;align-items:flex-end;gap:1.5rem;border-bottom:3px solid var(--text);padding-bottom:.9rem}
+.hdr h1{font-family:var(--display);font-weight:800;font-size:1.7rem;letter-spacing:-.04em;line-height:1}
+.hdr .tag{font-size:.55rem;padding:.2rem .5rem;background:var(--text);color:var(--bg);text-transform:uppercase;letter-spacing:.14em;font-weight:600;align-self:center}
+
+/* Panels */
+.pnl{background:var(--surface);border:1px solid var(--border);padding:1.2rem 1.4rem;margin-bottom:1rem}
+.pnl-t{font-size:.58rem;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);margin-bottom:.7rem;font-weight:700;display:flex;align-items:center;gap:.5rem}
+.pnl-t .hint{font-weight:400;letter-spacing:.04em;text-transform:none;font-size:.55rem;color:var(--muted)}
+.row{display:flex;gap:.7rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.5rem}
+.fld{display:flex;flex-direction:column;gap:.15rem}
+.fld label{font-size:.5rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.fld input,.fld select{font-family:var(--mono);font-size:.8rem;padding:.35rem .5rem;background:var(--bg);border:1px solid var(--border);color:var(--text);outline:none;transition:border-color .15s}
+.fld input:focus,.fld select:focus{border-color:var(--accent)}
+.btn{font-family:var(--mono);font-size:.6rem;padding:.38rem .7rem;border:1px solid;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.btn-p{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-p:hover{background:#1e40af}
+.btn-run{background:var(--green);border-color:var(--green);color:#fff;font-size:.72rem;padding:.55rem 1.4rem}
+.btn-run:hover{background:#047857}
+.btn-d{background:none;border-color:var(--red);color:var(--red)}
+.btn-d:hover{background:rgba(220,38,38,.05)}
+
+/* Focus */
+.focus-g{display:flex;gap:0}
+.focus-b{font-family:var(--mono);font-size:.65rem;padding:.32rem .6rem;background:var(--bg);border:1px solid var(--border);color:var(--dim);cursor:pointer;transition:all .15s;font-weight:600}
+.focus-b+.focus-b{border-left:none}
+.focus-b.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* Epic table */
+.epic-tbl{width:100%;border-collapse:collapse;margin-top:.4rem}
+.epic-tbl th{font-size:.48rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:.45rem .5rem;text-align:left;border-bottom:1px solid var(--border);font-weight:700}
+.epic-tbl td{padding:.35rem .5rem;border-bottom:1px solid var(--border-lt);vertical-align:middle}
+.epic-tbl input{font-family:var(--mono);font-size:.78rem;padding:.25rem .35rem;width:100%;background:var(--bg);border:1px solid var(--border-lt);color:var(--text);outline:none;text-align:center}
+.epic-tbl input.name-in{text-align:left;font-weight:600}
+.epic-tbl input:focus{border-color:var(--accent)}
+.epic-tbl .fam-sel{font-family:var(--mono);font-size:.68rem;padding:.25rem .3rem;background:var(--bg);border:1px solid var(--border-lt);color:var(--text);cursor:pointer;width:100%;outline:none}
+.epic-tbl .fam-sel:focus{border-color:var(--accent)}
+.epic-tbl .rm{cursor:pointer;color:var(--red);opacity:.4;font-size:.9rem;transition:opacity .15s;text-align:center}
+.epic-tbl .rm:hover{opacity:1}
+.epic-sum{font-size:.58rem;color:var(--dim);margin-top:.4rem}
+
+/* Throughput chips */
+.tp-list{display:flex;flex-wrap:wrap;gap:.25rem;min-height:26px;align-items:center}
+.tp-chip{display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .45rem;background:var(--accent-lt);border:1px solid rgba(26,86,219,.12);font-size:.7rem;font-weight:600;color:var(--accent)}
+.tp-chip .x{cursor:pointer;color:var(--red);font-weight:700;font-size:.75rem;opacity:.4;transition:opacity .15s}
+.tp-chip .x:hover{opacity:1}
+.tp-stats{font-size:.55rem;color:var(--muted);margin-top:.35rem}
+
+/* Throughput rate modifier */
+.rate-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:.35rem;margin-top:.4rem}
+.rate-cell{background:var(--bg);border:1px solid var(--border-lt);padding:.4rem .45rem;transition:border-color .15s}
+.rate-cell:hover{border-color:var(--accent)}
+.rate-lbl{font-size:.48rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.2rem;font-weight:600}
+.rate-cell input{font-family:var(--mono);font-size:.75rem;width:100%;padding:.2rem .25rem;background:var(--surface);border:1px solid var(--border-lt);color:var(--text);outline:none;text-align:center;font-weight:600}
+.rate-cell input:focus{border-color:var(--accent)}
+.rate-bar{height:3px;margin-top:.25rem;background:var(--border-lt);overflow:hidden}
+.rate-bar-f{height:100%;transition:width .2s,background .2s}
+
+/* Results */
+.results{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.rcard{background:var(--surface);border:1px solid var(--border);padding:1.1rem 1.3rem;position:relative;overflow:hidden}
+.rcard::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.rcard.q1::before{background:var(--amber)}.rcard.q2::before{background:var(--purple)}
+.rq{font-size:.55rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.5rem;font-weight:700}
+.prow{display:flex;gap:1rem}
+.pb{flex:1}
+.pb .pl{font-size:.48rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.1rem;font-weight:600}
+.pb .pv{font-size:1.25rem;font-weight:700}
+.pb.p85 .pv{color:var(--amber)}.pb.p95 .pv{color:var(--red)}
+.rd{font-size:.55rem;color:var(--dim);margin-top:.4rem;line-height:1.5}
+
+/* Chart */
+.chart-pnl{background:var(--surface);border:1px solid var(--border);padding:1.3rem 1.1rem .8rem}
+.chart-area{width:100%;height:370px;position:relative}
+canvas{display:block;width:100%!important;height:100%!important}
+.legend{display:flex;gap:1rem;margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border-lt);justify-content:center;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:.25rem;font-size:.55rem;color:var(--dim)}
+.legend-sw{width:12px;height:3px}
+.sim-st{font-size:.55rem;color:var(--muted);margin-top:.4rem;text-align:center}
+
+@media(max-width:700px){
+  .wrap{padding:1.5rem 1rem}.results{grid-template-columns:1fr}.chart-area{height:260px}.rate-grid{grid-template-columns:repeat(3,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <h1>Monte Carlo Forecast</h1>
+    <span class="tag">Epic Delivery</span>
+  </div>
+
+  <!-- Core params -->
+  <div class="pnl">
+    <div class="pnl-t">Parametry projektu</div>
+    <div class="row">
+      <div class="fld"><label>Data startu</label><input type="date" id="start-date" value="2026-06-01"></div>
+      <div class="fld"><label>Data docelowa</label><input type="date" id="target-date" value="2026-09-30"></div>
+      <div class="fld"><label>Długość okresu (dni)</label><input type="number" id="period-len" value="14" min="1" style="width:60px"></div>
+      <div class="fld">
+        <label>Skupienie zespołu</label>
+        <div class="focus-g">
+          <button class="focus-b" data-v="0.25">25%</button>
+          <button class="focus-b" data-v="0.50">50%</button>
+          <button class="focus-b on" data-v="0.75">75%</button>
+          <button class="focus-b" data-v="1.00">100%</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Epic table -->
+  <div class="pnl">
+    <div class="pnl-t">Epiki <span class="hint">— estymacja min/max w historyjkach, poziom znajomości</span></div>
+    <table class="epic-tbl" id="epic-tbl">
+      <thead><tr><th style="width:25%">Nazwa</th><th style="width:15%">Min (hist.)</th><th style="width:15%">Max (hist.)</th><th style="width:30%">Znajomość</th><th style="width:8%"></th></tr></thead>
+      <tbody id="epic-body"></tbody>
+    </table>
+    <div class="row" style="margin-top:.5rem">
+      <button class="btn btn-p" id="add-epic">+ Dodaj Epik</button>
+    </div>
+    <div class="epic-sum" id="epic-sum"></div>
+  </div>
+
+  <!-- Throughput -->
+  <div class="pnl">
+    <div class="pnl-t">Historyczna przepustowość <span class="hint">— historyjki / okres</span></div>
+    <div class="tp-list" id="tp-list"></div>
+    <div class="row" style="margin-top:.4rem">
+      <input class="fld" style="width:55px;font-family:var(--mono);font-size:.78rem;padding:.3rem .4rem;background:var(--bg);border:1px solid var(--border);color:var(--text);outline:none" id="tp-new" type="number" min="0" placeholder="np. 5">
+      <button class="btn btn-p" id="tp-add">+ Dodaj</button>
+    </div>
+    <div class="tp-stats" id="tp-stats"></div>
+  </div>
+
+  <!-- Throughput rate modifier -->
+  <div class="pnl">
+    <div class="pnl-t">Przewidywany wskaźnik przepustowości <span class="hint">— mnożnik per <select id="rate-unit" style="font-family:var(--mono);font-size:.55rem;border:1px solid var(--border);background:var(--bg);color:var(--dim);padding:.1rem .2rem;outline:none"><option value="month">miesiąc</option><option value="week">tydzień</option></select></span></div>
+    <div class="rate-grid" id="rate-grid"></div>
+  </div>
+
+  <div style="text-align:center;margin:1.2rem 0">
+    <button class="btn btn-run" id="run-btn">▶ Uruchom symulację (10 000×)</button>
+  </div>
+
+  <!-- Results -->
+  <div class="results">
+    <div class="rcard q1">
+      <div class="rq">Kiedy dostarczymy wszystkie Epiki?</div>
+      <div class="prow">
+        <div class="pb p85"><div class="pl">85% pewności</div><div class="pv" id="r-d85">—</div></div>
+        <div class="pb p95"><div class="pl">95% pewności</div><div class="pv" id="r-d95">—</div></div>
+      </div>
+      <div class="rd" id="r-det1">—</div>
+    </div>
+    <div class="rcard q2">
+      <div class="rq">Ile historyjek dostarczymy do daty docelowej?</div>
+      <div class="prow">
+        <div class="pb p85"><div class="pl">85% pewności</div><div class="pv" id="r-i85">—</div></div>
+        <div class="pb p95"><div class="pl">95% pewności</div><div class="pv" id="r-i95">—</div></div>
+      </div>
+      <div class="rd" id="r-det2">—</div>
+    </div>
+  </div>
+
+  <div class="chart-pnl">
+    <div class="chart-area"><canvas id="hist"></canvas></div>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-sw" style="background:var(--accent)"></span> Rozkład</div>
+      <div class="legend-item"><span class="legend-sw" style="background:var(--amber)"></span> P85</div>
+      <div class="legend-item"><span class="legend-sw" style="background:var(--red)"></span> P95</div>
+      <div class="legend-item"><span class="legend-sw" style="background:var(--purple);height:2px;border-top:2px dashed var(--purple)"></span> Data docelowa</div>
+    </div>
+    <div class="sim-st" id="sim-st">—</div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════
+const FAM_LEVELS = [
+  {id:'low',   label:'Niska (×1.3 zakresu)',   factor:1.3},
+  {id:'med',   label:'Średnia (×1.15 zakresu)',  factor:1.15},
+  {id:'high',  label:'Wysoka (×1.0 zakresu)', factor:1.0},
+  {id:'expert',label:'Ekspercka (×0.9 zakresu)', factor:0.9}
+];
+
+let epics = [
+  {name:'Epik 1',min:4,max:6,fam:'med'},
+  {name:'Epik 2',min:3,max:5,fam:'med'},
+  {name:'Epik 3',min:3,max:4,fam:'low'},
+  {name:'Epik 4',min:3,max:5,fam:'low'},
+  {name:'Epik 5',min:4,max:7,fam:'low'},
+  {name:'Epik 6',min:4,max:8,fam:'low'},
+];
+
+let throughput = [3,4,5,4,2,7,4,5];
+let focus = 0.75;
+let rateMap = {}; // key → multiplier
+const SIMS = 10000;
+const mPL = ['sty','lut','mar','kwi','maj','cze','lip','sie','wrz','paź','lis','gru'];
+
+// ═══════════════════════════════════════
+// EPIC TABLE
+// ═══════════════════════════════════════
+function renderEpics(){
+  const tb = document.getElementById('epic-body');
+  tb.innerHTML = '';
+  epics.forEach((e,i) => {
+    const tr = document.createElement('tr');
+    const famOpts = FAM_LEVELS.map(f=>`<option value="${f.id}"${e.fam===f.id?' selected':''}>${f.label}</option>`).join('');
+    tr.innerHTML = `
+      <td><input class="name-in" value="${e.name}" data-i="${i}" data-f="name"></td>
+      <td><input type="number" min="0" value="${e.min}" data-i="${i}" data-f="min" style="width:50px"></td>
+      <td><input type="number" min="0" value="${e.max}" data-i="${i}" data-f="max" style="width:50px"></td>
+      <td><select class="fam-sel" data-i="${i}">${famOpts}</select></td>
+      <td class="rm" data-i="${i}">×</td>`;
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll('input').forEach(inp => inp.addEventListener('change', () => {
+    const i=parseInt(inp.dataset.i), f=inp.dataset.f;
+    if(f==='name') epics[i].name=inp.value;
+    else epics[i][f]=parseInt(inp.value)||0;
+    updateEpicSum();
+  }));
+  tb.querySelectorAll('.fam-sel').forEach(sel => sel.addEventListener('change', () => {
+    epics[parseInt(sel.dataset.i)].fam=sel.value;
+  }));
+  tb.querySelectorAll('.rm').forEach(el => el.addEventListener('click', () => {
+    epics.splice(parseInt(el.dataset.i),1);
+    renderEpics();
+  }));
+  updateEpicSum();
+}
+
+function updateEpicSum(){
+  const minT=epics.reduce((a,e)=>a+e.min,0);
+  const maxT=epics.reduce((a,e)=>a+e.max,0);
+  document.getElementById('epic-sum').textContent=`${epics.length} Epików · zakres: ${minT}–${maxT} historyjek`;
+}
+
+document.getElementById('add-epic').addEventListener('click',()=>{
+  epics.push({name:`Epik ${epics.length+1}`,min:3,max:5,fam:'med'});
+  renderEpics();
+});
+renderEpics();
+
+// ═══════════════════════════════════════
+// THROUGHPUT
+// ═══════════════════════════════════════
+function renderTP(){
+  const el=document.getElementById('tp-list');
+  el.innerHTML=throughput.map((v,i)=>`<span class="tp-chip">P${i+1}:${v}<span class="x" data-i="${i}">×</span></span>`).join('');
+  el.querySelectorAll('.x').forEach(x=>x.addEventListener('click',()=>{throughput.splice(parseInt(x.dataset.i),1);renderTP()}));
+  const s=document.getElementById('tp-stats');
+  if(!throughput.length){s.textContent='Brak danych';return}
+  const sorted=[...throughput].sort((a,b)=>a-b);
+  const avg=(throughput.reduce((a,b)=>a+b,0)/throughput.length).toFixed(1);
+  s.textContent=`${throughput.length} okresów · śr: ${avg} · min: ${Math.min(...throughput)} · max: ${Math.max(...throughput)}`;
+}
+renderTP();
+document.getElementById('tp-add').addEventListener('click',()=>{
+  const v=parseInt(document.getElementById('tp-new').value);if(isNaN(v)||v<0)return;
+  throughput.push(v);document.getElementById('tp-new').value='';renderTP();
+});
+document.getElementById('tp-new').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('tp-add').click()});
+
+// ═══════════════════════════════════════
+// FOCUS
+// ═══════════════════════════════════════
+document.querySelectorAll('.focus-b').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.focus-b').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');focus=parseFloat(b.dataset.v);
+}));
+
+// ═══════════════════════════════════════
+// RATE GRID
+// ═══════════════════════════════════════
+function buildRateGrid(){
+  const start=new Date(document.getElementById('start-date').value);
+  const unit=document.getElementById('rate-unit').value;
+  const grid=document.getElementById('rate-grid');
+  grid.innerHTML='';rateMap={};
+
+  const count=unit==='week'?26:12;
+  for(let i=0;i<count;i++){
+    let d,key,label;
+    if(unit==='month'){
+      d=new Date(start.getFullYear(),start.getMonth()+i,1);
+      key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      label=`${mPL[d.getMonth()]} ${d.getFullYear().toString().slice(2)}`;
+    } else {
+      d=new Date(start.getTime()+i*7*86400000);
+      key=`w${i}`;
+      label=`T${i+1} (${d.getDate().toString().padStart(2,'0')}.${(d.getMonth()+1).toString().padStart(2,'0')})`;
+    }
+    rateMap[key]=1.0;
+    const cell=document.createElement('div');cell.className='rate-cell';
+    cell.innerHTML=`<div class="rate-lbl">${label}</div><input type="number" min="0.5" max="2.0" step="0.1" value="1.0" data-key="${key}"><div class="rate-bar"><div class="rate-bar-f" style="width:33%;background:var(--accent)"></div></div>`;
+    grid.appendChild(cell);
+
+    const inp=cell.querySelector('input'),bf=cell.querySelector('.rate-bar-f');
+    inp.addEventListener('input',()=>{
+      let v=parseFloat(inp.value);if(isNaN(v))v=1.0;v=Math.max(0.5,Math.min(2.0,v));
+      rateMap[key]=v;
+      bf.style.width=((v-0.5)/1.5*100)+'%';
+      bf.style.background=v<0.8?'var(--red)':v<1.0?'var(--amber)':v>1.0?'var(--green)':'var(--accent)';
+    });
+  }
+}
+buildRateGrid();
+document.getElementById('start-date').addEventListener('change',buildRateGrid);
+document.getElementById('rate-unit').addEventListener('change',buildRateGrid);
+
+function getRateForDate(ms){
+  const unit=document.getElementById('rate-unit').value;
+  const d=new Date(ms);
+  if(unit==='month'){
+    const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    return rateMap[key]||1.0;
+  }
+  const start=new Date(document.getElementById('start-date').value).getTime();
+  const wi=Math.floor((ms-start)/(7*86400000));
+  return rateMap[`w${wi}`]||1.0;
+}
+
+// ═══════════════════════════════════════
+// SIMULATION
+// ═══════════════════════════════════════
+function runSim(){
+  if(throughput.length<2||epics.length<1) return;
+
+  const startDate=new Date(document.getElementById('start-date').value);
+  const targetDate=new Date(document.getElementById('target-date').value);
+  const periodLen=parseInt(document.getElementById('period-len').value)||14;
+  const msToTarget=targetDate.getTime()-startDate.getTime();
+  const periodsToTarget=Math.max(0,Math.floor(msToTarget/(periodLen*86400000)));
+
+  const endDates=[],periodCounts=[],itemsByTarget=[];
+
+  for(let s=0;s<SIMS;s++){
+    // Generate effective backlog for this sim: for each epic, random uniform [min,max] * familiarity factor
+    let totalStories=0;
+    for(const e of epics){
+      const size=e.min+Math.random()*(e.max-e.min);
+      const ff=FAM_LEVELS.find(f=>f.id===e.fam)||FAM_LEVELS[1];
+      totalStories+=Math.round(size*ff.factor);
+    }
+
+    // Q1: periods to finish
+    let rem=totalStories,sp=0,curMs=startDate.getTime();
+    while(rem>0&&sp<300){
+      const base=throughput[Math.floor(Math.random()*throughput.length)];
+      const rate=getRateForDate(curMs+periodLen*86400000/2);
+      const eff=Math.max(0,Math.round(base*focus*rate));
+      rem-=eff;sp++;curMs+=periodLen*86400000;
+    }
+    periodCounts.push(sp);endDates.push(curMs);
+
+    // Q2: items by target
+    let del=0,cm2=startDate.getTime();
+    for(let p=0;p<periodsToTarget;p++){
+      const base=throughput[Math.floor(Math.random()*throughput.length)];
+      const rate=getRateForDate(cm2+periodLen*86400000/2);
+      del+=Math.max(0,Math.round(base*focus*rate));
+      cm2+=periodLen*86400000;
+    }
+    itemsByTarget.push(Math.min(del,totalStories));
+  }
+
+  endDates.sort((a,b)=>a-b);periodCounts.sort((a,b)=>a-b);itemsByTarget.sort((a,b)=>a-b);
+
+  const minStories=epics.reduce((a,e)=>a+e.min,0);
+  const maxStories=epics.reduce((a,e)=>a+e.max,0);
+
+  window._sim={endDates,periodCounts,itemsByTarget,startDate,targetDate,periodLen,periodsToTarget,minStories,maxStories};
+  displayResults();
+}
+
+function pct(arr,p){return arr[Math.min(Math.floor(p/100*arr.length),arr.length-1)]}
+function fmtD(ms){const d=new Date(ms);return `${d.getDate()} ${mPL[d.getMonth()]} ${d.getFullYear()}`}
+
+function displayResults(){
+  const S=window._sim;if(!S)return;
+
+  document.getElementById('r-d85').textContent=fmtD(pct(S.endDates,85));
+  document.getElementById('r-d95').textContent=fmtD(pct(S.endDates,95));
+  const sp85=pct(S.periodCounts,85),sp95=pct(S.periodCounts,95);
+  document.getElementById('r-det1').textContent=`85%: ${sp85} okresów (${sp85*S.periodLen}d) · 95%: ${sp95} okresów (${sp95*S.periodLen}d) · zakres: ${S.minStories}–${S.maxStories} hist. · skupienie: ${Math.round(focus*100)}%`;
+
+  const it85=pct(S.itemsByTarget,15),it95=pct(S.itemsByTarget,5);
+  document.getElementById('r-i85').textContent=`≥${it85} hist.`;
+  document.getElementById('r-i95').textContent=`≥${it95} hist.`;
+  document.getElementById('r-det2').textContent=`Do ${fmtD(S.targetDate.getTime())}: ${S.periodsToTarget} okresów`;
+
+  document.getElementById('sim-st').textContent=`${SIMS.toLocaleString()} symulacji · ${epics.length} Epików · ${throughput.length} próbek · skupienie ${Math.round(focus*100)}%`;
+
+  drawHist();
+}
+
+// ═══════════════════════════════════════
+// HISTOGRAM
+// ═══════════════════════════════════════
+const cvs=document.getElementById('hist'),cx=cvs.getContext('2d');
+const P={top:25,right:30,bottom:55,left:50};
+
+function drawHist(){
+  const S=window._sim;if(!S)return;
+  const{endDates,targetDate}=S;
+  const r=cvs.parentElement.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  const W=r.width,H=r.height;cvs.width=W*dpr;cvs.height=H*dpr;
+  cx.setTransform(dpr,0,0,dpr,0,0);cx.clearRect(0,0,W,H);
+
+  const minD=endDates[0],maxD=endDates[endDates.length-1];
+  const bs=7*86400000,nb=Math.max(1,Math.ceil((maxD-minD)/bs)+1);
+  const bins=new Array(nb).fill(0);
+  for(const d of endDates) bins[Math.min(Math.floor((d-minD)/bs),nb-1)]++;
+  const mb=Math.max(...bins);
+  const pW=W-P.left-P.right,pH=H-P.top-P.bottom;
+  const bw=Math.max(2,pW/nb-1);
+  const xS=i=>P.left+i*(pW/nb),yS=v=>P.top+pH-(v/mb)*pH;
+
+  const ySt=mb>2000?500:mb>1000?200:mb>500?100:50;
+  for(let v=0;v<=mb;v+=ySt){
+    const y=Math.round(yS(v))+.5;
+    cx.strokeStyle='#e2e0d8';cx.lineWidth=1;cx.beginPath();cx.moveTo(P.left,y);cx.lineTo(W-P.right,y);cx.stroke();
+    cx.fillStyle='#9a988f';cx.font='9px "IBM Plex Mono",monospace';cx.textAlign='right';cx.textBaseline='middle';
+    cx.fillText(v,P.left-6,y);
+  }
+
+  const d85=pct(endDates,85),d95=pct(endDates,95);
+  for(let i=0;i<nb;i++){
+    if(!bins[i])continue;
+    const x=xS(i),y=yS(bins[i]),h=pH-(y-P.top),bd=minD+i*bs;
+    cx.fillStyle=bd>=d95?'#dc2626':bd>=d85?'#d97706':'#1a56db';
+    cx.globalAlpha=.75;cx.fillRect(x+.5,y,bw,h);cx.globalAlpha=1;
+  }
+
+  function pLine(val,col,lbl){
+    const bi=(val-minD)/bs,x=xS(bi);if(x<P.left||x>W-P.right)return;
+    cx.strokeStyle=col;cx.lineWidth=2;cx.setLineDash([6,4]);
+    cx.beginPath();cx.moveTo(x,P.top);cx.lineTo(x,H-P.bottom);cx.stroke();cx.setLineDash([]);
+    cx.fillStyle=col;cx.font='600 9px "IBM Plex Mono",monospace';cx.textAlign='center';cx.textBaseline='bottom';
+    cx.fillText(lbl,x,P.top-4);cx.font='8px "IBM Plex Mono",monospace';cx.fillText(fmtD(val),x,P.top-14);
+  }
+  pLine(pct(endDates,50),'#059669','P50');pLine(d85,'#d97706','P85');pLine(d95,'#dc2626','P95');
+
+  const tMs=targetDate.getTime();
+  if(tMs>=minD-bs*2&&tMs<=maxD+bs*4){
+    const bi=(tMs-minD)/bs,x=xS(bi);
+    cx.strokeStyle='#7c3aed';cx.lineWidth=2;cx.setLineDash([4,3]);
+    cx.beginPath();cx.moveTo(x,P.top);cx.lineTo(x,H-P.bottom);cx.stroke();cx.setLineDash([]);
+    cx.fillStyle='#7c3aed';cx.font='600 7.5px "IBM Plex Mono",monospace';cx.textAlign='center';cx.textBaseline='top';
+    cx.fillText('CEL',x,H-P.bottom+2);
+  }
+
+  cx.fillStyle='#9a988f';cx.font='9px "IBM Plex Mono",monospace';cx.textAlign='center';cx.textBaseline='top';
+  const seen=new Set();
+  for(let i=0;i<nb;i+=Math.max(1,Math.floor(nb/12))){
+    const d=new Date(minD+i*bs),k=`${d.getFullYear()}-${d.getMonth()}`;
+    if(seen.has(k))continue;seen.add(k);
+    cx.fillText(`${mPL[d.getMonth()]} ${d.getFullYear().toString().slice(2)}`,xS(i),H-P.bottom+8);
+  }
+  cx.save();cx.fillStyle='#9a988f';cx.font='600 9px "IBM Plex Mono",monospace';
+  cx.translate(12,P.top+pH/2);cx.rotate(-Math.PI/2);cx.textAlign='center';
+  cx.fillText('LICZBA SYMULACJI',0,0);cx.restore();
+}
+
+// ═══════════════════════════════════════
+document.getElementById('run-btn').addEventListener('click',runSim);
+window.addEventListener('resize',()=>{if(window._sim)drawHist()});
+runSim();
+</script>
+</body>
+</html>
