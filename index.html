@@ -54,7 +54,6 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .tp-btn.active{color:#fff}
 .tp-btn[data-tp="avg"].active{border-color:#818cf8;color:#a5b4fc;background:rgba(129,140,248,.1)}
 .tp-btn[data-tp="median"].active{border-color:var(--p50);color:var(--p50);background:rgba(74,222,128,.08)}
-.tp-btn[data-tp="p85"].active{border-color:var(--p85);color:var(--p85);background:rgba(250,204,21,.08)}
 
 .range-row{display:flex;align-items:center;gap:.6rem;margin-bottom:1.5rem;flex-wrap:wrap}
 .range-label{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em}
@@ -81,6 +80,20 @@ canvas{display:block;width:100%!important;height:100%!important;cursor:crosshair
 .removed-chip .ri{color:var(--success);font-weight:700;font-size:.8rem}
 .restore-all-btn{font-family:'JetBrains Mono',monospace;font-size:.68rem;padding:.35rem .7rem;border-radius:6px;border:1px solid rgba(74,222,128,.3);background:rgba(74,222,128,.06);color:var(--success);cursor:pointer;transition:all .2s;margin-left:.5rem}
 .restore-all-btn:hover{background:rgba(74,222,128,.15);border-color:rgba(74,222,128,.5)}
+.close-btn{font-family:'JetBrains Mono',monospace;font-size:.68rem;padding:.35rem .7rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);cursor:pointer;transition:all .2s;margin-left:.5rem}
+.close-btn:hover{background:var(--surface2);color:var(--text);border-color:var(--text-muted)}
+
+.bin-items-section{margin-top:1.5rem}
+.bin-items-section .section-title .count{background:var(--accent);color:#fff}
+.bin-items-section .section-title .hint{font-family:'DM Sans',sans-serif;font-size:.65rem;color:var(--text-muted);text-transform:none;letter-spacing:0;margin-left:.5rem;font-weight:400}
+.bin-chip{display:inline-flex;align-items:center;gap:.4rem;padding:.3rem .6rem;border-radius:6px;background:var(--surface2);border:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--text-dim);cursor:pointer;transition:all .15s}
+.bin-chip:hover{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.4);color:var(--text)}
+.bin-chip:hover .bx{color:var(--danger)}
+.bin-chip .bx{color:var(--text-muted);font-weight:700;font-size:.95rem;line-height:.7;transition:color .15s}
+.bin-chip .bsz{display:inline-block;padding:.05rem .35rem;border-radius:3px;font-size:.6rem;font-weight:600;letter-spacing:.04em}
+.bin-chip .bsz.S{background:var(--s-glow);color:var(--s-color)}
+.bin-chip .bsz.M{background:var(--m-glow);color:var(--m-color)}
+.bin-chip .bsz.L{background:var(--l-glow);color:var(--l-color)}
 
 .add-panel{margin-top:1.5rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.2rem 1.5rem}
 .add-panel .section-title{margin-bottom:1rem}
@@ -162,7 +175,6 @@ canvas{display:block;width:100%!important;height:100%!important;cursor:crosshair
     <div class="tp-toggles" style="display:none">
       <button class="tp-btn" data-tp="avg">Średnia</button>
       <button class="tp-btn" data-tp="median">Mediana</button>
-      <button class="tp-btn" data-tp="p85">P85</button>
     </div>
   </div>
 
@@ -181,6 +193,16 @@ canvas{display:block;width:100%!important;height:100%!important;cursor:crosshair
       <div class="legend-item"><span class="legend-dot m"></span> Medium</div>
       <div class="legend-item"><span class="legend-dot l"></span> Large</div>
     </div>
+  </div>
+
+  <div class="bin-items-section" id="bin-items-section" style="display:none">
+    <div class="section-title">
+      <span id="bin-items-title">Elementy w przedziale</span>
+      <span class="count" id="bin-items-count">0</span>
+      <span class="hint">kliknij element aby go usunąć</span>
+      <button class="close-btn" id="bin-close">× Zamknij</button>
+    </div>
+    <div class="removed-list" id="bin-items-list"></div>
   </div>
 
   <div class="removed-section" id="removed-section" style="display:none">
@@ -243,6 +265,7 @@ let activeSizes = new Set(['S','M','L']);
 let activePercentiles = new Set();
 let activeThroughputStats = new Set();
 let hoveredIdx = -1;
+let selectedBin = null;
 let rangeFrom = null, rangeTo = null;
 
 // ═══════════════════════════════════════════
@@ -419,7 +442,7 @@ function drawHistogram(data,pctls){
 
   const bins=Array.from({length:numBins},(_,i)=>({
     S:0,M:0,L:0,total:0,
-    lo:i*binW,hi:(i+1)*binW
+    lo:i*binW,hi:(i+1)*binW,isLast:i===numBins-1
   }));
   data.forEach(d=>{
     const idx=Math.min(Math.floor(d.leadTime/binW),numBins-1);
@@ -482,6 +505,12 @@ function drawHistogram(data,pctls){
       ctx.fillStyle='#7a7a92';ctx.font='600 10px "JetBrains Mono",monospace';
       ctx.textAlign='center';ctx.textBaseline='bottom';
       ctx.fillText(b.total,cx,yScale(b.total)-4);
+    }
+    // Highlight selected bin
+    if(selectedBin&&b.lo===selectedBin.lo&&b.total>0){
+      ctx.strokeStyle='#fff';ctx.lineWidth=2;
+      const hy=yScale(b.total),hh=yScale(0)-yScale(b.total);
+      ctx.strokeRect(x-1.5,hy-1.5,barW+3,hh+3);
     }
     if(b.total>0){
       bars.push({x:x,y:yScale(b.total),w:barW,h:yScale(0)-yScale(b.total),type:'bin',bin:b});
@@ -608,16 +637,14 @@ function drawThroughput(data){
     });
   });
 
-  // Throughput stats markers (toggleable): Średnia / Mediana / P85
+  // Throughput stats markers (toggleable): Średnia / Mediana
   const tpStats={
     avg:totals.reduce((a,b)=>a+b,0)/months.length,
-    median:percentile(totals,50),
-    p85:percentile(totals,85)
+    median:percentile(totals,50)
   };
   const tpDefs=[
     {key:'avg',    label:'Średnia', color:'#818cf8', xPos:PAD.left+8,                    align:'left'},
-    {key:'median', label:'Mediana', color:'#4ade80', xPos:(PAD.left+W-PAD.right)/2,      align:'center'},
-    {key:'p85',    label:'P85',     color:'#facc15', xPos:W-PAD.right-4,                 align:'right'}
+    {key:'median', label:'Mediana', color:'#4ade80', xPos:W-PAD.right-4,                 align:'right'}
   ];
   for(const def of tpDefs){
     if(!activeThroughputStats.has(def.key)) continue;
@@ -704,10 +731,21 @@ canvas.addEventListener('mouseleave',()=>{
 });
 
 canvas.addEventListener('click',e=>{
-  if(activeView!=='scatter') return;
-  const dot=findDot(e);
-  if(!dot) return;
-  removePoint(dot.data._id);
+  if(activeView==='scatter'){
+    const dot=findDot(e);
+    if(!dot) return;
+    removePoint(dot.data._id);
+  } else if(activeView==='histogram'){
+    const bar=findBar(e);
+    if(bar){
+      // Toggle: clicking same bin closes; clicking new bin switches
+      if(selectedBin&&selectedBin.lo===bar.bin.lo) selectedBin=null;
+      else selectedBin={lo:bar.bin.lo,hi:bar.bin.hi,isLast:bar.bin.isLast};
+    } else {
+      selectedBin=null;
+    }
+    renderBinItems();draw();
+  }
 });
 
 // ═══════════════════════════════════════════
@@ -719,7 +757,7 @@ function removePoint(id){
   const [item]=DATA.splice(idx,1);
   removedPoints.push(item);
   hoveredIdx=-1;tooltip.classList.remove('visible');
-  renderRemovedList();draw();
+  renderRemovedList();renderBinItems();draw();
   showToast(`Usunięto: ${item.dateLabel} · ${item.size} · ${item.leadTime} dni`);
 }
 function restorePoint(id){
@@ -727,14 +765,14 @@ function restorePoint(id){
   if(idx<0) return;
   const [item]=removedPoints.splice(idx,1);
   DATA.push(item);DATA.sort((a,b)=>dateToTs(a.date)-dateToTs(b.date));
-  renderRemovedList();draw();
+  renderRemovedList();renderBinItems();draw();
   showToast(`Przywrócono: ${item.dateLabel}`);
 }
 function restoreAll(){
   if(!removedPoints.length) return;
   DATA.push(...removedPoints);removedPoints=[];
   DATA.sort((a,b)=>dateToTs(a.date)-dateToTs(b.date));
-  renderRemovedList();draw();
+  renderRemovedList();renderBinItems();draw();
   showToast('Przywrócono wszystkie punkty');
 }
 function renderRemovedList(){
@@ -747,6 +785,27 @@ function renderRemovedList(){
 }
 document.getElementById('restore-all').addEventListener('click',restoreAll);
 
+function renderBinItems(){
+  const sec=document.getElementById('bin-items-section');
+  if(activeView!=='histogram'||!selectedBin){sec.style.display='none';return}
+  const list=document.getElementById('bin-items-list');
+  const data=getVisible();
+  // Last bin (highest) is inclusive on both ends; others: [lo, hi)
+  const items=data.filter(d=>{
+    if(selectedBin.isLast) return d.leadTime>=selectedBin.lo&&d.leadTime<=selectedBin.hi;
+    return d.leadTime>=selectedBin.lo&&d.leadTime<selectedBin.hi;
+  }).sort((a,b)=>a.leadTime-b.leadTime);
+  if(!items.length){sec.style.display='none';selectedBin=null;return}
+  sec.style.display='block';
+  document.getElementById('bin-items-title').textContent=`Elementy w przedziale ${selectedBin.lo}–${selectedBin.hi} dni`;
+  document.getElementById('bin-items-count').textContent=items.length;
+  list.innerHTML=items.map(d=>`<div class="bin-chip" data-id="${d._id}"><span class="bsz ${d.size}">${d.size}</span> ${d.dateLabel} · ${d.leadTime}d <span class="bx">×</span></div>`).join('');
+  list.querySelectorAll('.bin-chip').forEach(c=>c.addEventListener('click',()=>removePoint(c.dataset.id)));
+}
+document.getElementById('bin-close').addEventListener('click',()=>{
+  selectedBin=null;renderBinItems();draw();
+});
+
 // ═══════════════════════════════════════════
 // DATE RANGE
 // ═══════════════════════════════════════════
@@ -757,7 +816,7 @@ function handleRange(){
   toEl.classList.toggle('invalid',rt==='invalid');
   rangeFrom=(rf&&rf!=='invalid')?rf:null;
   rangeTo=(rt&&rt!=='invalid')?rt:null;
-  hoveredIdx=-1;draw();
+  hoveredIdx=-1;draw();renderBinItems();
 }
 document.getElementById('range-from').addEventListener('input',handleRange);
 document.getElementById('range-to').addEventListener('input',handleRange);
@@ -767,7 +826,7 @@ document.getElementById('range-to').addEventListener('input',handleRange);
 // ═══════════════════════════════════════════
 document.querySelectorAll('.toggle-btn').forEach(btn=>btn.addEventListener('click',()=>{
   const s=btn.dataset.size;btn.classList.toggle('active');
-  activeSizes.has(s)?activeSizes.delete(s):activeSizes.add(s);hoveredIdx=-1;draw();
+  activeSizes.has(s)?activeSizes.delete(s):activeSizes.add(s);hoveredIdx=-1;draw();renderBinItems();
 }));
 document.querySelectorAll('.pctl-btn').forEach(btn=>btn.addEventListener('click',()=>{
   const p=parseInt(btn.dataset.p);btn.classList.toggle('active');
@@ -789,7 +848,7 @@ document.getElementById('add-btn').addEventListener('click',()=>{
   const item={date:dateVal,dateLabel:formatDateLabel(dateVal),size,leadTime:lead,_id:makeId()};
   DATA.push(item);DATA.sort((a,b)=>dateToTs(a.date)-dateToTs(b.date));
   document.getElementById('add-date').value='';document.getElementById('add-lead').value='';
-  draw();showToast(`Dodano: ${item.dateLabel} · ${size} · ${lead} dni`);
+  draw();renderBinItems();showToast(`Dodano: ${item.dateLabel} · ${size} · ${lead} dni`);
 });
 
 // ═══════════════════════════════════════════
@@ -835,7 +894,7 @@ document.getElementById('file-import').addEventListener('change',async e=>{
       added++;
     }
     DATA.sort((a,b)=>dateToTs(a.date)-dateToTs(b.date));
-    draw();
+    selectedBin=null;draw();renderBinItems();
     if(added) showToast(`Zaimportowano ${added} elementów z „${file.name}"`);
     else showToast('Nie znaleziono pasujących danych w pliku','error');
   } catch(err){
@@ -851,22 +910,24 @@ function updateUIForView(){
   const sub=document.getElementById('header-sub');
   const pctlToggles=document.querySelector('.pctl-toggles');
   const tpToggles=document.querySelector('.tp-toggles');
+  if(activeView!=='histogram') selectedBin=null;
   if(activeView==='scatter'){
     sub.textContent='Scatterplot czasów realizacji z percentylami · kliknij punkt aby go usunąć';
     pctlToggles.style.display='';
     tpToggles.style.display='none';
     canvas.style.cursor='crosshair';
   } else if(activeView==='histogram'){
-    sub.textContent='Histogram czasów realizacji — rozkład częstości w cyklu lead time';
+    sub.textContent='Histogram czasów realizacji · kliknij słupek aby zobaczyć i usuwać elementy';
     pctlToggles.style.display='';
     tpToggles.style.display='none';
-    canvas.style.cursor='default';
+    canvas.style.cursor='pointer';
   } else if(activeView==='throughput'){
     sub.textContent='Tempo dostarczania — liczba ukończonych elementów w cyklu miesięcznym';
     pctlToggles.style.display='none';
     tpToggles.style.display='';
     canvas.style.cursor='default';
   }
+  renderBinItems();
 }
 document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
