@@ -49,6 +49,13 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .pctl-btn[data-p="85"].active{border-color:var(--p85);color:var(--p85);background:rgba(250,204,21,.08)}
 .pctl-btn[data-p="95"].active{border-color:var(--p95);color:var(--p95);background:rgba(239,68,68,.08)}
 
+.tp-toggles{display:flex;gap:.5rem;margin-left:auto}
+.tp-btn{font-family:'JetBrains Mono',monospace;font-size:.7rem;padding:.4rem .7rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);cursor:pointer;transition:all .2s}
+.tp-btn.active{color:#fff}
+.tp-btn[data-tp="avg"].active{border-color:#818cf8;color:#a5b4fc;background:rgba(129,140,248,.1)}
+.tp-btn[data-tp="median"].active{border-color:var(--p50);color:var(--p50);background:rgba(74,222,128,.08)}
+.tp-btn[data-tp="p85"].active{border-color:var(--p85);color:var(--p85);background:rgba(250,204,21,.08)}
+
 .range-row{display:flex;align-items:center;gap:.6rem;margin-bottom:1.5rem;flex-wrap:wrap}
 .range-label{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em}
 .range-input{font-family:'JetBrains Mono',monospace;font-size:.8rem;padding:.4rem .6rem;width:100px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);outline:none;transition:border-color .2s}
@@ -106,6 +113,14 @@ canvas{display:block;width:100%!important;height:100%!important;cursor:crosshair
 .tooltip .tt-size{display:inline-block;padding:.1rem .4rem;border-radius:4px;font-size:.65rem;font-weight:600;margin-top:.25rem;font-family:'JetBrains Mono',monospace;letter-spacing:.05em}
 .tt-size.S{background:var(--s-glow);color:var(--s-color)}.tt-size.M{background:var(--m-glow);color:var(--m-color)}.tt-size.L{background:var(--l-glow);color:var(--l-color)}
 .tt-hint{font-size:.6rem;color:var(--text-muted);margin-top:.35rem;font-family:'JetBrains Mono',monospace;border-top:1px solid var(--border);padding-top:.3rem}
+.tt-breakdown{display:flex;gap:.3rem;margin-top:.3rem;flex-wrap:wrap}
+.tt-breakdown .tt-size{margin-top:0}
+
+.tabs{display:flex;gap:.2rem;margin-bottom:1.5rem;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{font-family:'JetBrains Mono',monospace;font-size:.75rem;padding:.7rem 1.1rem;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-dim);cursor:pointer;transition:all .2s;text-transform:uppercase;letter-spacing:.05em;margin-bottom:-1px;white-space:nowrap;font-weight:500}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--s-color);border-bottom-color:var(--s-color)}
 
 @media(max-width:640px){
   .wrapper{padding:1.5rem 1rem}.chart-area{height:300px}.stats-bar{gap:.6rem}.stat-card{padding:.7rem .9rem}.stat-value{font-size:1.3rem}.controls,.range-row{gap:.5rem}.pctl-toggles{margin-left:0;width:100%}
@@ -116,7 +131,13 @@ canvas{display:block;width:100%!important;height:100%!important;cursor:crosshair
 <div class="wrapper">
   <div class="header">
     <h1>Lead Times · 2024–25</h1>
-    <p>Scatterplot czasów realizacji z percentylami · kliknij punkt aby go usunąć</p>
+    <p id="header-sub">Scatterplot czasów realizacji z percentylami · kliknij punkt aby go usunąć</p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-view="scatter">Scatterplot</button>
+    <button class="tab" data-view="histogram">Histogram lead time</button>
+    <button class="tab" data-view="throughput">Throughput / miesiąc</button>
   </div>
 
   <div class="stats-bar">
@@ -137,6 +158,11 @@ canvas{display:block;width:100%!important;height:100%!important;cursor:crosshair
       <button class="pctl-btn" data-p="50">P50</button>
       <button class="pctl-btn" data-p="85">P85</button>
       <button class="pctl-btn" data-p="95">P95</button>
+    </div>
+    <div class="tp-toggles" style="display:none">
+      <button class="tp-btn" data-tp="avg">Średnia</button>
+      <button class="tp-btn" data-tp="median">Mediana</button>
+      <button class="tp-btn" data-tp="p85">P85</button>
     </div>
   </div>
 
@@ -212,8 +238,10 @@ const mNamesShort=['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź',
 // ═══════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════
+let activeView = 'scatter';
 let activeSizes = new Set(['S','M','L']);
 let activePercentiles = new Set();
+let activeThroughputStats = new Set();
 let hoveredIdx = -1;
 let rangeFrom = null, rangeTo = null;
 
@@ -291,12 +319,20 @@ function draw(){
   document.getElementById('st-p95').innerHTML=data.length?`${Math.round(pctls[95])} ${su}`:'—';
 
   ctx.clearRect(0,0,W,H);
+  window._dots=[];window._bars=[];
+
   if(!data.length){
     ctx.fillStyle='#4a4a5e';ctx.font='13px "JetBrains Mono",monospace';ctx.textAlign='center';
     ctx.fillText('Brak danych do wyświetlenia',W/2,H/2);
-    window._dots=[];return;
+    return;
   }
 
+  if(activeView==='scatter') drawScatter(data,pctls);
+  else if(activeView==='histogram') drawHistogram(data,pctls);
+  else if(activeView==='throughput') drawThroughput(data);
+}
+
+function drawScatter(data,pctls){
   const allTs=data.map(d=>dateToTs(d.date)),allLt=data.map(d=>d.leadTime);
   let xMin=Math.min(...allTs),xMax=Math.max(...allTs);
   const xPad=(xMax-xMin)*0.04||86400000*15;
@@ -363,6 +399,245 @@ function draw(){
 }
 
 // ═══════════════════════════════════════════
+// HISTOGRAM
+// ═══════════════════════════════════════════
+function niceBinWidth(maxVal){
+  const target=12;
+  const raw=maxVal/target;
+  const steps=[5,10,15,20,25,30,50,75,100,150,200,250,500,1000];
+  for(const s of steps){ if(s>=raw) return s; }
+  return Math.ceil(raw/100)*100;
+}
+
+function drawHistogram(data,pctls){
+  const plotW=W-PAD.left-PAD.right,plotH=H-PAD.top-PAD.bottom;
+  const lts=data.map(d=>d.leadTime);
+  const maxLt=Math.max(...lts);
+  const binW=niceBinWidth(maxLt);
+  const numBins=Math.floor(maxLt/binW)+1;
+  const xMax=numBins*binW;
+
+  const bins=Array.from({length:numBins},(_,i)=>({
+    S:0,M:0,L:0,total:0,
+    lo:i*binW,hi:(i+1)*binW
+  }));
+  data.forEach(d=>{
+    const idx=Math.min(Math.floor(d.leadTime/binW),numBins-1);
+    bins[idx][d.size]++;bins[idx].total++;
+  });
+
+  const yMax=Math.max(...bins.map(b=>b.total),1)*1.15;
+  const xScale=v=>PAD.left+(v/xMax)*plotW;
+  const yScale=v=>PAD.top+plotH-(v/yMax)*plotH;
+
+  // Y grid
+  ctx.strokeStyle='rgba(255,255,255,.04)';ctx.lineWidth=1;
+  const yStep=Math.max(1,Math.ceil(yMax/8));
+  for(let v=0;v<=yMax;v+=yStep){
+    const y=Math.round(yScale(v))+.5;
+    ctx.beginPath();ctx.moveTo(PAD.left,y);ctx.lineTo(W-PAD.right,y);ctx.stroke();
+    ctx.fillStyle='#4a4a5e';ctx.font='11px "JetBrains Mono",monospace';ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(Math.round(v),PAD.left-10,y);
+  }
+
+  // X axis labels (bin edges)
+  ctx.fillStyle='#4a4a5e';ctx.font='10px "JetBrains Mono",monospace';ctx.textAlign='center';ctx.textBaseline='top';
+  const xStep=numBins>10?Math.ceil(numBins/10):1;
+  for(let i=0;i<=numBins;i+=xStep){
+    const x=xScale(i*binW);
+    ctx.fillText(i*binW,x,H-PAD.bottom+12);
+  }
+
+  // Y label
+  ctx.save();ctx.fillStyle='#5a5a72';ctx.font='600 11px "JetBrains Mono",monospace';
+  ctx.translate(16,PAD.top+plotH/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';
+  ctx.fillText('LICZBA ELEMENTÓW',0,0);ctx.restore();
+
+  // X label
+  ctx.fillStyle='#5a5a72';ctx.font='600 11px "JetBrains Mono",monospace';ctx.textAlign='center';ctx.textBaseline='bottom';
+  ctx.fillText('CZAS REALIZACJI (dni)',PAD.left+plotW/2,H-2);
+
+  // Bars (stacked S/M/L)
+  const bars=[];
+  const barSlot=plotW/numBins;
+  const barW=barSlot*0.82;
+  bins.forEach((b,i)=>{
+    const cx=xScale(b.lo+binW/2);
+    const x=cx-barW/2;
+    let stackY=yScale(0);
+    for(const size of ['S','M','L']){
+      if(b[size]===0) continue;
+      const segH=yScale(0)-yScale(b[size]);
+      const yTop=stackY-segH;
+      ctx.fillStyle=COLORS[size].fill;
+      ctx.fillRect(x,yTop,barW,segH);
+      // subtle separator between segments
+      if(stackY<yScale(0)){
+        ctx.fillStyle='rgba(10,10,15,.4)';
+        ctx.fillRect(x,stackY,barW,1);
+      }
+      stackY=yTop;
+    }
+    if(b.total>0){
+      ctx.fillStyle='#7a7a92';ctx.font='600 10px "JetBrains Mono",monospace';
+      ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillText(b.total,cx,yScale(b.total)-4);
+    }
+    if(b.total>0){
+      bars.push({x:x,y:yScale(b.total),w:barW,h:yScale(0)-yScale(b.total),type:'bin',bin:b});
+    }
+  });
+
+  // Percentile lines (vertical)
+  for(const p of [50,85,95]){
+    if(!activePercentiles.has(p)) continue;
+    const x=xScale(pctls[p]);
+    if(x<PAD.left||x>W-PAD.right) continue;
+    ctx.strokeStyle=PCOLORS[p];ctx.lineWidth=1.5;ctx.setLineDash([6,4]);
+    ctx.beginPath();ctx.moveTo(x,PAD.top);ctx.lineTo(x,H-PAD.bottom);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=PCOLORS[p];ctx.font='600 10px "JetBrains Mono",monospace';
+    ctx.textAlign='left';ctx.textBaseline='top';
+    ctx.fillText(`P${p}: ${Math.round(pctls[p])}d`,x+4,PAD.top+4);
+  }
+
+  window._bars=bars;
+}
+
+// ═══════════════════════════════════════════
+// THROUGHPUT (monthly)
+// ═══════════════════════════════════════════
+function drawThroughput(data){
+  const plotW=W-PAD.left-PAD.right,plotH=H-PAD.top-PAD.bottom;
+
+  // Determine month range — respect rangeFrom/rangeTo if set, else span data
+  let firstDate,lastDate;
+  if(rangeFrom&&rangeFrom!=='invalid'){
+    firstDate=new Date(rangeFrom.year,rangeFrom.month-1,1);
+  } else {
+    const minTs=Math.min(...data.map(d=>dateToTs(d.date)));
+    firstDate=new Date(minTs);firstDate.setDate(1);
+  }
+  if(rangeTo&&rangeTo!=='invalid'){
+    lastDate=new Date(rangeTo.year,rangeTo.month-1,1);
+  } else {
+    const maxTs=Math.max(...data.map(d=>dateToTs(d.date)));
+    lastDate=new Date(maxTs);lastDate.setDate(1);
+  }
+
+  const months=[];
+  let cur=new Date(firstDate);
+  while(cur.getTime()<=lastDate.getTime()){
+    months.push({
+      year:cur.getFullYear(),mon:cur.getMonth(),
+      key:`${cur.getFullYear()}-${cur.getMonth()}`,
+      label:`${mNamesShort[cur.getMonth()]} ${cur.getFullYear().toString().slice(2)}`,
+      labelLong:`${mNamesPL[cur.getMonth()]} ${cur.getFullYear()}`,
+      S:0,M:0,L:0,total:0
+    });
+    cur.setMonth(cur.getMonth()+1);
+    if(months.length>240) break; // safety
+  }
+  const monthMap=new Map(months.map(m=>[m.key,m]));
+  data.forEach(d=>{
+    const dt=new Date(d.date);
+    const m=monthMap.get(`${dt.getFullYear()}-${dt.getMonth()}`);
+    if(m){m[d.size]++;m.total++;}
+  });
+
+  const totals=months.map(m=>m.total);
+  const yMax=Math.max(...totals,1)*1.2;
+  const xScale=i=>PAD.left+((i+0.5)/months.length)*plotW;
+  const yScale=v=>PAD.top+plotH-(v/yMax)*plotH;
+
+  // Y grid
+  ctx.strokeStyle='rgba(255,255,255,.04)';ctx.lineWidth=1;
+  const yStep=Math.max(1,Math.ceil(yMax/8));
+  for(let v=0;v<=yMax;v+=yStep){
+    const y=Math.round(yScale(v))+.5;
+    ctx.beginPath();ctx.moveTo(PAD.left,y);ctx.lineTo(W-PAD.right,y);ctx.stroke();
+    ctx.fillStyle='#4a4a5e';ctx.font='11px "JetBrains Mono",monospace';ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(Math.round(v),PAD.left-10,y);
+  }
+
+  // Y label
+  ctx.save();ctx.fillStyle='#5a5a72';ctx.font='600 11px "JetBrains Mono",monospace';
+  ctx.translate(16,PAD.top+plotH/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';
+  ctx.fillText('UKOŃCZONE ELEMENTY / MIESIĄC',0,0);ctx.restore();
+
+  // Bars + month labels
+  const bars=[];
+  const slot=plotW/months.length;
+  const barW=slot*0.7;
+  const xStep=months.length>14?Math.ceil(months.length/14):1;
+
+  months.forEach((m,i)=>{
+    const cx=xScale(i);
+    const x=cx-barW/2;
+
+    if(i%xStep===0){
+      ctx.fillStyle='#4a4a5e';ctx.font='11px "JetBrains Mono",monospace';
+      ctx.textAlign='center';ctx.textBaseline='top';
+      ctx.fillText(m.label,cx,H-PAD.bottom+12);
+    }
+
+    let stackY=yScale(0);
+    for(const size of ['S','M','L']){
+      if(m[size]===0) continue;
+      const segH=yScale(0)-yScale(m[size]);
+      const yTop=stackY-segH;
+      ctx.fillStyle=COLORS[size].fill;
+      ctx.fillRect(x,yTop,barW,segH);
+      if(stackY<yScale(0)){
+        ctx.fillStyle='rgba(10,10,15,.4)';
+        ctx.fillRect(x,stackY,barW,1);
+      }
+      stackY=yTop;
+    }
+    if(m.total>0){
+      ctx.fillStyle='#7a7a92';ctx.font='600 10px "JetBrains Mono",monospace';
+      ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillText(m.total,cx,yScale(m.total)-4);
+    }
+    bars.push({
+      x:x,
+      y:m.total>0?yScale(m.total):yScale(0)-2,
+      w:barW,
+      h:m.total>0?(yScale(0)-yScale(m.total)):4,
+      type:'month',month:m
+    });
+  });
+
+  // Throughput stats markers (toggleable): Średnia / Mediana / P85
+  const tpStats={
+    avg:totals.reduce((a,b)=>a+b,0)/months.length,
+    median:percentile(totals,50),
+    p85:percentile(totals,85)
+  };
+  const tpDefs=[
+    {key:'avg',    label:'Średnia', color:'#818cf8', xPos:PAD.left+8,                    align:'left'},
+    {key:'median', label:'Mediana', color:'#4ade80', xPos:(PAD.left+W-PAD.right)/2,      align:'center'},
+    {key:'p85',    label:'P85',     color:'#facc15', xPos:W-PAD.right-4,                 align:'right'}
+  ];
+  for(const def of tpDefs){
+    if(!activeThroughputStats.has(def.key)) continue;
+    const val=tpStats[def.key];
+    if(val<=0) continue;
+    const y=yScale(val);
+    if(y<PAD.top-5||y>H-PAD.bottom+5) continue;
+    ctx.strokeStyle=def.color;ctx.lineWidth=1.5;ctx.setLineDash([6,4]);
+    ctx.beginPath();ctx.moveTo(PAD.left,y);ctx.lineTo(W-PAD.right,y);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=def.color;ctx.font='600 10px "JetBrains Mono",monospace';
+    ctx.textAlign=def.align;ctx.textBaseline='bottom';
+    const valStr=def.key==='avg'?val.toFixed(1):Math.round(val);
+    ctx.fillText(`${def.label}: ${valStr}/mies.`,def.xPos,y-4);
+  }
+
+  window._bars=bars;
+}
+
+// ═══════════════════════════════════════════
 // TOOLTIP & CLICK
 // ═══════════════════════════════════════════
 const tooltip=document.getElementById('tooltip');
@@ -374,27 +649,62 @@ function findDot(e){
   }
   return null;
 }
+function findBar(e){
+  const rect=canvas.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  for(const b of (window._bars||[])){
+    if(mx>=b.x&&mx<=b.x+b.w&&my>=b.y&&my<=b.y+b.h) return b;
+  }
+  return null;
+}
+function positionTooltip(e){
+  let tx=e.clientX+14,ty=e.clientY-10;
+  if(tx+200>window.innerWidth) tx=e.clientX-200;
+  if(ty<10) ty=10;
+  tooltip.style.left=tx+'px';tooltip.style.top=ty+'px';
+}
+function renderBreakdown(o){
+  return ['S','M','L'].filter(s=>o[s]>0)
+    .map(s=>`<span class="tt-size ${s}">${s}: ${o[s]}</span>`).join('');
+}
 
 canvas.addEventListener('mousemove',e=>{
-  const dot=findDot(e);
-  const ni=dot?dot.idx:-1;
-  if(ni!==hoveredIdx){hoveredIdx=ni;draw()}
-  if(dot){
-    const d=dot.data;
-    document.getElementById('tt-date').textContent=d.dateLabel;
-    document.getElementById('tt-lead').textContent=d.leadTime+' dni';
-    const ts=document.getElementById('tt-size');
-    ts.textContent='Rozmiar '+d.size;ts.className='tt-size '+d.size;
-    tooltip.classList.add('visible');
-    let tx=e.clientX+14,ty=e.clientY-10;
-    if(tx+190>window.innerWidth) tx=e.clientX-190;
-    if(ty<10) ty=10;
-    tooltip.style.left=tx+'px';tooltip.style.top=ty+'px';
-  } else tooltip.classList.remove('visible');
+  if(activeView==='scatter'){
+    const dot=findDot(e);
+    const ni=dot?dot.idx:-1;
+    if(ni!==hoveredIdx){hoveredIdx=ni;draw()}
+    if(dot){
+      const d=dot.data;
+      tooltip.innerHTML=`<div class="tt-date">${d.dateLabel}</div><div class="tt-lead">${d.leadTime} dni</div><div class="tt-size ${d.size}">Rozmiar ${d.size}</div><div class="tt-hint">kliknij aby usunąć</div>`;
+      tooltip.classList.add('visible');
+      positionTooltip(e);
+    } else tooltip.classList.remove('visible');
+  } else if(activeView==='histogram'){
+    const bar=findBar(e);
+    if(bar){
+      const b=bar.bin;
+      const noun=b.total===1?'element':(b.total<5?'elementy':'elementów');
+      tooltip.innerHTML=`<div class="tt-date">${b.lo}–${b.hi} dni</div><div class="tt-lead">${b.total} ${noun}</div><div class="tt-breakdown">${renderBreakdown(b)}</div>`;
+      tooltip.classList.add('visible');
+      positionTooltip(e);
+    } else tooltip.classList.remove('visible');
+  } else if(activeView==='throughput'){
+    const bar=findBar(e);
+    if(bar){
+      const m=bar.month;
+      const noun=m.total===1?'ukończony':(m.total>1&&m.total<5?'ukończone':'ukończonych');
+      tooltip.innerHTML=`<div class="tt-date">${m.labelLong}</div><div class="tt-lead">${m.total} ${noun}</div>${m.total?`<div class="tt-breakdown">${renderBreakdown(m)}</div>`:''}`;
+      tooltip.classList.add('visible');
+      positionTooltip(e);
+    } else tooltip.classList.remove('visible');
+  }
 });
-canvas.addEventListener('mouseleave',()=>{hoveredIdx=-1;draw();tooltip.classList.remove('visible')});
+canvas.addEventListener('mouseleave',()=>{
+  if(activeView==='scatter'&&hoveredIdx!==-1){hoveredIdx=-1;draw()}
+  tooltip.classList.remove('visible');
+});
 
 canvas.addEventListener('click',e=>{
+  if(activeView!=='scatter') return;
   const dot=findDot(e);
   if(!dot) return;
   removePoint(dot.data._id);
@@ -462,6 +772,10 @@ document.querySelectorAll('.toggle-btn').forEach(btn=>btn.addEventListener('clic
 document.querySelectorAll('.pctl-btn').forEach(btn=>btn.addEventListener('click',()=>{
   const p=parseInt(btn.dataset.p);btn.classList.toggle('active');
   activePercentiles.has(p)?activePercentiles.delete(p):activePercentiles.add(p);draw();
+}));
+document.querySelectorAll('.tp-btn').forEach(btn=>btn.addEventListener('click',()=>{
+  const k=btn.dataset.tp;btn.classList.toggle('active');
+  activeThroughputStats.has(k)?activeThroughputStats.delete(k):activeThroughputStats.add(k);draw();
 }));
 
 // ═══════════════════════════════════════════
@@ -531,9 +845,44 @@ document.getElementById('file-import').addEventListener('change',async e=>{
 });
 
 // ═══════════════════════════════════════════
+// TAB SWITCHING
+// ═══════════════════════════════════════════
+function updateUIForView(){
+  const sub=document.getElementById('header-sub');
+  const pctlToggles=document.querySelector('.pctl-toggles');
+  const tpToggles=document.querySelector('.tp-toggles');
+  if(activeView==='scatter'){
+    sub.textContent='Scatterplot czasów realizacji z percentylami · kliknij punkt aby go usunąć';
+    pctlToggles.style.display='';
+    tpToggles.style.display='none';
+    canvas.style.cursor='crosshair';
+  } else if(activeView==='histogram'){
+    sub.textContent='Histogram czasów realizacji — rozkład częstości w cyklu lead time';
+    pctlToggles.style.display='';
+    tpToggles.style.display='none';
+    canvas.style.cursor='default';
+  } else if(activeView==='throughput'){
+    sub.textContent='Tempo dostarczania — liczba ukończonych elementów w cyklu miesięcznym';
+    pctlToggles.style.display='none';
+    tpToggles.style.display='';
+    canvas.style.cursor='default';
+  }
+}
+document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  activeView=btn.dataset.view;
+  hoveredIdx=-1;
+  tooltip.classList.remove('visible');
+  updateUIForView();
+  draw();
+}));
+
+// ═══════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════
 window.addEventListener('resize',()=>{resize();draw()});
+updateUIForView();
 resize();draw();
 </script>
 </body>
